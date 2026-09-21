@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,11 +39,9 @@ namespace QRAuth.Services
             _repo = repo;
         }
 
-        static DateTime ParseExpiry(string expires) =>
-            DateTimeOffset.TryParse(expires, CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out var dto)
-                ? dto.UtcDateTime
-                : DateTime.MinValue;
+        /// <summary>Has this record been granted access at all, and not since revoked? Access
+        /// here is pure authorization (grant/ban), no time limit — see UsersRepository.AddUser.</summary>
+        static bool HasAccess([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] LampacUser? u) => u != null && !u.Ban;
 
         static bool IsAdmin(long tgId) => Array.IndexOf(ModInit.conf.admin_ids, tgId) >= 0;
 
@@ -117,10 +114,10 @@ namespace QRAuth.Services
             }
 
             var existing = _repo.GetByTgId(userId);
-            if (existing != null && ParseExpiry(existing.Expires) >= DateTime.UtcNow)
+            if (HasAccess(existing))
             {
                 await bot.SendMessage(msg.Chat.Id,
-                    "👋  Привет!\n\nУ вас уже есть активный доступ к Lampa.",
+                    "👋  Привет!\n\nУ вас уже есть доступ к Lampa.",
                     cancellationToken: ct);
                 return;
             }
@@ -147,12 +144,10 @@ namespace QRAuth.Services
         async Task ShowStatsAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
             var users = _repo.ReadAll();
-            var now = DateTime.UtcNow;
             var banned = users.Count(u => u.Ban);
-            var active = users.Count(u => !u.Ban && ParseExpiry(u.Expires) >= now);
-            var expired = users.Count - banned - active;
+            var active = users.Count - banned;
 
-            var text = $"📊  Статистика\n\nВсего: {users.Count}\n✅  Активных: {active}\n⛔  Заблокированных: {banned}\n❌  Истёкших: {expired}";
+            var text = $"📊  Статистика\n\nВсего: {users.Count}\n✅  Активных: {active}\n⛔  Заблокированных: {banned}";
             await bot.SendMessage(chatId, text, cancellationToken: ct);
         }
 
@@ -168,7 +163,7 @@ namespace QRAuth.Services
             }
 
             var existing = _repo.GetByTgId(userId);
-            if (existing == null || ParseExpiry(existing.Expires) < DateTime.UtcNow)
+            if (!HasAccess(existing))
             {
                 // remembered so a fast admin approval can auto-confirm this same session
                 // (see HandleGrantAsync) instead of making the user rescan the QR
@@ -208,7 +203,7 @@ namespace QRAuth.Services
         async Task HandleQrAuthAsync(ITelegramBotClient bot, CallbackQuery cb, string sessionId, CancellationToken ct)
         {
             var user = _repo.GetByTgId(cb.From.Id);
-            if (user == null || ParseExpiry(user.Expires) < DateTime.UtcNow)
+            if (!HasAccess(user))
             {
                 await bot.AnswerCallbackQuery(cb.Id, "Доступ не активен.", showAlert: true, cancellationToken: ct);
                 return;
@@ -231,9 +226,9 @@ namespace QRAuth.Services
             long userId = cb.From.Id;
 
             var existing = _repo.GetByTgId(userId);
-            if (existing != null && ParseExpiry(existing.Expires) >= DateTime.UtcNow)
+            if (HasAccess(existing))
             {
-                await bot.AnswerCallbackQuery(cb.Id, "У вас уже есть активный доступ.", showAlert: true, cancellationToken: ct);
+                await bot.AnswerCallbackQuery(cb.Id, "У вас уже есть доступ.", showAlert: true, cancellationToken: ct);
                 return;
             }
 
@@ -379,11 +374,9 @@ namespace QRAuth.Services
             await ShowUsersListAsync(bot, chatId, ct);
         }
 
-        static string UserStatus(LampacUser u) =>
-            u.Ban ? "заблокирован" : (ParseExpiry(u.Expires) >= DateTime.UtcNow ? "активен" : "истёк");
+        static string UserStatus(LampacUser u) => u.Ban ? "заблокирован" : "активен";
 
-        static string UserStatusIcon(LampacUser u) =>
-            u.Ban ? "⛔" : (ParseExpiry(u.Expires) >= DateTime.UtcNow ? "✅" : "❌");
+        static string UserStatusIcon(LampacUser u) => u.Ban ? "⛔" : "✅";
 
         /// <summary>Edits the admin's tracked menu message if it's still there; falls back to
         /// sending a fresh one (message too old to edit / chat cleared / first call ever).</summary>
@@ -421,11 +414,10 @@ namespace QRAuth.Services
 
         (string text, InlineKeyboardMarkup kb) BuildCardView(LampacUser u, int index, CardMode mode)
         {
-            var expiresAt = ParseExpiry(u.Expires);
             var name = string.IsNullOrWhiteSpace(u.Comment) ? u.TgId.ToString() : u.Comment;
             // token (u.Id — the login password) is deliberately not shown here, this is a
             // chat log an admin can screenshot/forward
-            var text = $"👤  {name}\nid={u.TgId}\nдоступ до {expiresAt:dd.MM.yyyy HH:mm} UTC · {UserStatus(u)}"
+            var text = $"👤  {name}\nid={u.TgId}\nстатус: {UserStatus(u)}"
                 + (mode == CardMode.ConfirmBlock ? "\n\n🚫  Заблокировать доступ? Это отключит уже открытую сессию в течение ~1 сек." : "");
 
             InlineKeyboardButton[] actionRow;
@@ -533,7 +525,6 @@ namespace QRAuth.Services
                 return;
             }
 
-            var days = ModInit.conf.default_access_days;
             var requester = _pendingRequesterNames.TryGetValue(tgId, out var reqName) ? reqName : tgId.ToString();
 
             string token;
@@ -541,7 +532,7 @@ namespace QRAuth.Services
             {
                 // comment is just the account name — kept parseable so an admin listing
                 // (or anything else keyed on it) can rely on its shape
-                token = _repo.AddUser(tgId, TimeSpan.FromDays(days), requester);
+                token = _repo.AddUser(tgId, requester);
             }
             catch (Exception ex)
             {
@@ -552,7 +543,7 @@ namespace QRAuth.Services
 
             _pendingRequesterNames.TryRemove(tgId, out _);
             _lastRequest.TryRemove(tgId, out _);
-            FileLog.Write($"[TelegramBot] Доступ выдан tgId={tgId} на {days} дн., admin={cb.From.Id}");
+            FileLog.Write($"[TelegramBot] Доступ выдан tgId={tgId}, admin={cb.From.Id}");
             await bot.AnswerCallbackQuery(cb.Id, "✅  Доступ выдан.", cancellationToken: ct);
             await MarkHandledAsync(bot, cb, "✅", requester, ct);
 
@@ -565,8 +556,8 @@ namespace QRAuth.Services
                 FileLog.Write($"[TelegramBot] QR-сессия {sessionId} авто-подтверждена при выдаче tgId={tgId}");
 
             var text = autoConfirmed
-                ? $"✅  Администратор выдал вам доступ к Lampa. Экран входа должен открыться сам.\n\nЕсли нет — пароль: <code>{token}</code>\nДействует {days} дн."
-                : $"✅  Администратор выдал вам доступ к Lampa.\n\nОтсканируйте QR на экране входа ещё раз — он войдёт сам. Либо введите пароль вручную: <code>{token}</code>\nДействует {days} дн.";
+                ? $"✅  Администратор выдал вам доступ к Lampa. Экран входа должен открыться сам.\n\nЕсли нет — пароль: <code>{token}</code>"
+                : $"✅  Администратор выдал вам доступ к Lampa.\n\nОтсканируйте QR на экране входа ещё раз — он войдёт сам. Либо введите пароль вручную: <code>{token}</code>";
 
             try
             {

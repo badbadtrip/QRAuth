@@ -57,12 +57,11 @@ namespace QRAuth
 
         static TelegramBotConf DefaultConf() => new()
         {
-            enable              = true,
-            bot_token           = "",
-            users_file_path     = "users.json",
-            log_path            = "tgbot.log",
-            admin_ids           = Array.Empty<long>(),
-            default_access_days = 30
+            enable          = true,
+            bot_token       = "",
+            users_file_path = "users.json",
+            log_path        = "tgbot.log",
+            admin_ids       = Array.Empty<long>()
         };
 
         static void SyncAndGenerateDenyPage()
