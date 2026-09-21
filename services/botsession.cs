@@ -26,6 +26,7 @@ namespace QRAuth.Services
         // sync via these constants instead of two hand-typed string literals
         const string BtnUsers = "👥  Пользователи";
         const string BtnStats = "📊  Статистика";
+        const string BtnPassword = "🔑  Пароль для входа";
 
         static readonly TimeSpan RequestCooldown = TimeSpan.FromMinutes(10);
         static readonly ConcurrentDictionary<long, DateTime> _lastRequest = new();
@@ -85,6 +86,16 @@ namespace QRAuth.Services
                 return;
             }
 
+            if (text == BtnPassword)
+            {
+                // silent no-op if access was revoked since the keyboard was last sent — same
+                // "don't confirm/deny a prober" reasoning as the /users check above
+                var u = _repo.GetByTgId(msg.From?.Id ?? 0);
+                if (!HasAccess(u)) return;
+                await SendPasswordCardAsync(bot, msg.Chat.Id, u, ct);
+                return;
+            }
+
             if (!text.StartsWith("/start")) return;
 
             var payload = text.Length > 6 ? text.Substring(6).Trim() : "";
@@ -117,8 +128,8 @@ namespace QRAuth.Services
             if (HasAccess(existing))
             {
                 await bot.SendMessage(msg.Chat.Id,
-                    "👋  Привет!\n\nУ вас уже есть доступ к Lampa.",
-                    cancellationToken: ct);
+                    "👋  Привет!\n\nУ вас уже есть доступ к Lampa. Кнопка ниже всегда под рукой — если понадобится ввести пароль вручную.",
+                    replyMarkup: PasswordKeyboard, cancellationToken: ct);
                 return;
             }
 
@@ -130,6 +141,12 @@ namespace QRAuth.Services
                 "👋  Привет!\n\nЭтот бот подтверждает вход в Lampa по QR-коду с экрана авторизации и может запросить для вас доступ у администратора.",
                 replyMarkup: kb, cancellationToken: ct);
         }
+
+        static readonly ReplyKeyboardMarkup PasswordKeyboard = new(new[]
+        {
+            new KeyboardButton[] { BtnPassword }
+        })
+        { ResizeKeyboard = true };
 
         async Task ShowAdminPanelAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
@@ -163,6 +180,27 @@ namespace QRAuth.Services
             }
 
             var existing = _repo.GetByTgId(userId);
+            if (!HasAccess(existing) && IsAdmin(userId))
+            {
+                // admin has no reqaccess/grant path of their own (SendWelcomeAsync short-circuits
+                // to the admin panel instead) — without this, an admin scanning the QR from their
+                // own device would fall through to that panel with no confirm button and no way
+                // to ever get a users.json record, so scanning is auto-provisioned here instead.
+                try
+                {
+                    var name = msg.From?.Username is { Length: > 0 } uname ? $"@{uname}" : "admin";
+                    _repo.AddUser(userId, name);
+                    existing = _repo.GetByTgId(userId);
+                    FileLog.Write($"[TelegramBot] Админ tgId={userId} авто-зарегистрирован для QR-входа.");
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Write($"[TelegramBot] Авто-регистрация админа tgId={userId} не удалась", ex);
+                    await bot.SendMessage(msg.Chat.Id, "Ошибка на сервере, смотри tgbot.log.", cancellationToken: ct);
+                    return;
+                }
+            }
+
             if (!HasAccess(existing))
             {
                 // remembered so a fast admin approval can auto-confirm this same session
@@ -294,6 +332,23 @@ namespace QRAuth.Services
             await bot.AnswerCallbackQuery(cb.Id, "Заявка отправлена администратору.", cancellationToken: ct);
         }
 
+        /// <summary>Self-service password re-issue — an approved user's password (the record's
+        /// <see cref="LampacUser.Id"/> token) already exists and never changes, so this just
+        /// re-displays it for manual entry (QR broken, second device, forgot it, etc.) instead
+        /// of making them re-request access from an admin. Reached only via the static
+        /// <see cref="BtnPassword"/> reply-keyboard button (kept pinned in the chat once access
+        /// is granted), not an inline button that would scroll away after one use.</summary>
+        async Task SendPasswordCardAsync(ITelegramBotClient bot, long chatId, LampacUser user, CancellationToken ct)
+        {
+            var text = "🔑  <b>Пароль для входа в Lampa</b>\n\n"
+                + "На экране входа нажмите «Войти по паролю» и укажите:\n\n"
+                + $"<code>{user.Id}</code>\n\n"
+                + "☝️  Нажмите на пароль, чтобы скопировать.\n"
+                + "🔒  Никому его не передавайте.";
+
+            await bot.SendMessage(chatId, text, parseMode: ParseMode.Html, replyMarkup: PasswordKeyboard, cancellationToken: ct);
+        }
+
         /// <summary>All the account info Telegram actually hands us about a requester, laid
         /// out as a card instead of the old one-line "от Anna (id=...)" — an admin approving
         /// access is making a judgment call about who this is, so show what's available
@@ -386,20 +441,20 @@ namespace QRAuth.Services
             {
                 try
                 {
-                    await bot.EditMessageText(chatId, msgId, text, replyMarkup: kb, cancellationToken: ct);
+                    await bot.EditMessageText(chatId, msgId, text, parseMode: ParseMode.Html, replyMarkup: kb, cancellationToken: ct);
                     return;
                 }
                 catch { /* message gone/too old to edit — send a fresh one below */ }
             }
 
-            var sent = await bot.SendMessage(chatId, text, replyMarkup: kb, cancellationToken: ct);
+            var sent = await bot.SendMessage(chatId, text, parseMode: ParseMode.Html, replyMarkup: kb, cancellationToken: ct);
             _usersMenuMessageId[chatId] = sent.MessageId;
         }
 
         (string text, InlineKeyboardMarkup? kb) BuildListView(List<LampacUser> users)
         {
             if (users.Count == 0)
-                return ("👥  Пользователей нет.", null);
+                return ("👥  <b>Пользователей нет.</b>", null);
 
             var rows = new List<InlineKeyboardButton[]>();
             for (int i = 0; i < users.Count; i++)
@@ -409,7 +464,7 @@ namespace QRAuth.Services
                 var label = $"{UserStatusIcon(u)}  {Truncate(name, 30)}";
                 rows.Add(new[] { InlineKeyboardButton.WithCallbackData(label, "uview:" + i) });
             }
-            return ($"👥  Пользователи ({users.Count})", new InlineKeyboardMarkup(rows));
+            return ($"👥  <b>Пользователи ({users.Count})</b>", new InlineKeyboardMarkup(rows));
         }
 
         (string text, InlineKeyboardMarkup kb) BuildCardView(LampacUser u, int index, CardMode mode)
@@ -417,8 +472,19 @@ namespace QRAuth.Services
             var name = string.IsNullOrWhiteSpace(u.Comment) ? u.TgId.ToString() : u.Comment;
             // token (u.Id — the login password) is deliberately not shown here, this is a
             // chat log an admin can screenshot/forward
-            var text = $"👤  {name}\nid={u.TgId}\nстатус: {UserStatus(u)}"
-                + (mode == CardMode.ConfirmBlock ? "\n\n🚫  Заблокировать доступ? Это отключит уже открытую сессию в течение ~1 сек." : "");
+            var lines = new List<string>
+            {
+                $"👤  <b>{HtmlEsc(name)}</b>",
+                "",
+                $"🆔  <code>{u.TgId}</code>",
+                $"{UserStatusIcon(u)}  статус: <b>{UserStatus(u)}</b>"
+            };
+            if (mode == CardMode.ConfirmBlock)
+            {
+                lines.Add("");
+                lines.Add("🚫  <b>Заблокировать доступ?</b> Это отключит уже открытую сессию в течение ~1 сек.");
+            }
+            var text = string.Join("\n", lines);
 
             InlineKeyboardButton[] actionRow;
             if (mode == CardMode.ConfirmBlock)
@@ -561,7 +627,7 @@ namespace QRAuth.Services
 
             try
             {
-                await bot.SendMessage(tgId, text, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, cancellationToken: ct);
+                await bot.SendMessage(tgId, text, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html, replyMarkup: PasswordKeyboard, cancellationToken: ct);
             }
             catch (Exception ex)
             {

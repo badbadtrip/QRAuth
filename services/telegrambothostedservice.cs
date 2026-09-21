@@ -77,11 +77,14 @@ namespace QRAuth.Services
                 _logger.LogWarning(ex, "[TelegramBot] DeleteWebhook warning");
             }
 
+            // Just /start in the menu for everyone, admin included — /users stays reachable
+            // for admins via the "👥 Пользователи" reply-keyboard button (ShowAdminPanelAsync),
+            // no need to clutter the slash-command autocomplete with it.
             try
             {
                 await bot.SetMyCommands(new[]
                 {
-                    new Telegram.Bot.Types.BotCommand { Command = "start", Description = "Подтвердить вход по QR" }
+                    new Telegram.Bot.Types.BotCommand { Command = "start", Description = "Запустить бота" }
                 }, cancellationToken: ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -89,23 +92,18 @@ namespace QRAuth.Services
                 _logger.LogWarning(ex, "[TelegramBot] SetMyCommands warning");
             }
 
-            // /users only shows in the menu for admins (chat-scoped command list) — everyone
-            // else keeps the plain default set above, HandleMessageAsync's IsAdmin check is
-            // the actual enforcement, this is just menu discoverability.
+            // a chat-scoped command list (set for admins by an older build) outranks the
+            // default one above and Telegram keeps serving it forever until explicitly
+            // deleted — without this, admins would still see the old /start+/users menu
             foreach (var adminId in ModInit.conf.admin_ids)
             {
                 try
                 {
-                    await bot.SetMyCommands(new[]
-                    {
-                        new Telegram.Bot.Types.BotCommand { Command = "start", Description = "Подтвердить вход по QR" },
-                        new Telegram.Bot.Types.BotCommand { Command = "users", Description = "Список пользователей" }
-                    }, scope: new Telegram.Bot.Types.BotCommandScopeChat { ChatId = adminId }, cancellationToken: ct).ConfigureAwait(false);
+                    await bot.DeleteMyCommands(scope: new Telegram.Bot.Types.BotCommandScopeChat { ChatId = adminId }, cancellationToken: ct).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    // admin hasn't started the bot yet / chat unreachable — non-fatal, same as notify-admin failures elsewhere
-                    _logger.LogWarning(ex, "[TelegramBot] SetMyCommands (admin scope) warning, adminId={AdminId}", adminId);
+                    _logger.LogWarning(ex, "[TelegramBot] DeleteMyCommands (admin scope) warning, adminId={AdminId}", adminId);
                 }
             }
 
