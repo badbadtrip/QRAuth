@@ -1,0 +1,8 @@
+{
+  "name": "QRAuth",
+  "enable": true,
+  "dynamic": true,
+  "references": [
+    "references/"
+  ]
+}
