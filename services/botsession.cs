@@ -148,10 +148,11 @@ namespace QRAuth.Services
         {
             var users = _repo.ReadAll();
             var now = DateTime.UtcNow;
-            var active = users.Count(u => ParseExpiry(u.Expires) >= now);
-            var expired = users.Count - active;
+            var banned = users.Count(u => u.Ban);
+            var active = users.Count(u => !u.Ban && ParseExpiry(u.Expires) >= now);
+            var expired = users.Count - banned - active;
 
-            var text = $"📊  Статистика\n\nВсего: {users.Count}\n✅  Активных: {active}\n❌  Истёкших: {expired}";
+            var text = $"📊  Статистика\n\nВсего: {users.Count}\n✅  Активных: {active}\n⛔  Заблокированных: {banned}\n❌  Истёкших: {expired}";
             await bot.SendMessage(chatId, text, cancellationToken: ct);
         }
 
@@ -381,6 +382,9 @@ namespace QRAuth.Services
         static string UserStatus(LampacUser u) =>
             u.Ban ? "заблокирован" : (ParseExpiry(u.Expires) >= DateTime.UtcNow ? "активен" : "истёк");
 
+        static string UserStatusIcon(LampacUser u) =>
+            u.Ban ? "⛔" : (ParseExpiry(u.Expires) >= DateTime.UtcNow ? "✅" : "❌");
+
         /// <summary>Edits the admin's tracked menu message if it's still there; falls back to
         /// sending a fresh one (message too old to edit / chat cleared / first call ever).</summary>
         async Task RenderMenuAsync(ITelegramBotClient bot, long chatId, string text, InlineKeyboardMarkup? kb, CancellationToken ct)
@@ -409,7 +413,7 @@ namespace QRAuth.Services
             {
                 var u = users[i];
                 var name = string.IsNullOrWhiteSpace(u.Comment) ? u.TgId.ToString() : u.Comment;
-                var label = $"{Truncate(name, 30)}  |  {UserStatus(u)}";
+                var label = $"{UserStatusIcon(u)}  {Truncate(name, 30)}";
                 rows.Add(new[] { InlineKeyboardButton.WithCallbackData(label, "uview:" + i) });
             }
             return ($"👥  Пользователи ({users.Count})", new InlineKeyboardMarkup(rows));
