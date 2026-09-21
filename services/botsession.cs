@@ -1,24 +1,33 @@
 #nullable enable
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using QRAuth.Models;
 
 namespace QRAuth.Services
 {
     /// <summary>
-    /// Bot has two jobs: confirm the deny-page QR login handshake for a user who
-    /// already has active access, and let a user request access with an admin
-    /// (configured via admin_ids) granting/denying it with a button tap. Everything
-    /// beyond that (self-service beyond one request, revocation, broadcasts, audit) is
-    /// still out of scope — grow it back deliberately if that stops being enough.
+    /// Bot's jobs: confirm the deny-page QR login handshake for a user who already has
+    /// active access, let a user request access with an admin (configured via admin_ids)
+    /// granting/denying it with a button tap, and let that admin list/revoke access via
+    /// /users. Everything beyond that (self-service beyond one request, broadcasts, audit)
+    /// is still out of scope — grow it back deliberately if that stops being enough.
     /// </summary>
     public class BotSession
     {
+        // reply-keyboard button labels doubled as the exact match text below — keep both in
+        // sync via these constants instead of two hand-typed string literals
+        const string BtnUsers = "👥  Пользователи";
+        const string BtnStats = "📊  Статистика";
+
         static readonly TimeSpan RequestCooldown = TimeSpan.FromMinutes(10);
         static readonly ConcurrentDictionary<long, DateTime> _lastRequest = new();
         static readonly ConcurrentDictionary<long, string> _pendingRequesterNames = new();
@@ -62,6 +71,23 @@ namespace QRAuth.Services
         async Task HandleMessageAsync(ITelegramBotClient bot, Message msg, CancellationToken ct)
         {
             var text = msg.Text?.Trim() ?? "";
+
+            if (text.StartsWith("/users", StringComparison.Ordinal) || text == BtnUsers)
+            {
+                // silent no-op for non-admins instead of "Недоступно" — don't confirm to a
+                // prober that /users is even a real command
+                if (!IsAdmin(msg.From?.Id ?? 0)) return;
+                await ShowUsersListAsync(bot, msg.Chat.Id, ct);
+                return;
+            }
+
+            if (text == BtnStats)
+            {
+                if (!IsAdmin(msg.From?.Id ?? 0)) return;
+                await ShowStatsAsync(bot, msg.Chat.Id, ct);
+                return;
+            }
+
             if (!text.StartsWith("/start")) return;
 
             var payload = text.Length > 6 ? text.Substring(6).Trim() : "";
@@ -77,6 +103,19 @@ namespace QRAuth.Services
         async Task SendWelcomeAsync(ITelegramBotClient bot, Message msg, CancellationToken ct)
         {
             long userId = msg.From?.Id ?? 0;
+
+            // admin's own /start has nothing to do with the "request access" flow below — they
+            // don't request access from themselves — so it's a fully separate branch, not a
+            // keyboard tacked onto the regular user welcome
+            if (IsAdmin(userId))
+            {
+                await bot.SendMessage(msg.Chat.Id,
+                    "👑  Привет, админ!\n\nЭтот бот подтверждает вход в Lampa по QR-коду с экрана авторизации и обрабатывает заявки на доступ. Кнопки ниже — панель администратора.",
+                    cancellationToken: ct);
+                await ShowAdminPanelAsync(bot, msg.Chat.Id, ct);
+                return;
+            }
+
             var existing = _repo.GetByTgId(userId);
             if (existing != null && ParseExpiry(existing.Expires) >= DateTime.UtcNow)
             {
@@ -93,6 +132,27 @@ namespace QRAuth.Services
             await bot.SendMessage(msg.Chat.Id,
                 "👋  Привет!\n\nЭтот бот подтверждает вход в Lampa по QR-коду с экрана авторизации и может запросить для вас доступ у администратора.",
                 replyMarkup: kb, cancellationToken: ct);
+        }
+
+        async Task ShowAdminPanelAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
+        {
+            var kb = new ReplyKeyboardMarkup(new[]
+            {
+                new KeyboardButton[] { BtnUsers, BtnStats }
+            })
+            { ResizeKeyboard = true };
+            await bot.SendMessage(chatId, "👑  Панель администратора", replyMarkup: kb, cancellationToken: ct);
+        }
+
+        async Task ShowStatsAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
+        {
+            var users = _repo.ReadAll();
+            var now = DateTime.UtcNow;
+            var active = users.Count(u => ParseExpiry(u.Expires) >= now);
+            var expired = users.Count - active;
+
+            var text = $"📊  Статистика\n\nВсего: {users.Count}\n✅  Активных: {active}\n❌  Истёкших: {expired}";
+            await bot.SendMessage(chatId, text, cancellationToken: ct);
         }
 
         /// <summary>Deep link from the deny-page QR: https://t.me/&lt;bot&gt;?start=qr_&lt;sessionId&gt;.</summary>
@@ -135,6 +195,11 @@ namespace QRAuth.Services
             if (data.StartsWith("grant:", StringComparison.Ordinal)) { await HandleGrantAsync(bot, cb, data.Substring(6), ct); return; }
             if (data.StartsWith("deny:", StringComparison.Ordinal)) { await HandleDenyAsync(bot, cb, data.Substring(5), ct); return; }
             if (data.StartsWith("qrauth:", StringComparison.Ordinal)) { await HandleQrAuthAsync(bot, cb, data.Substring(7), ct); return; }
+            if (data == "ulist") { await HandleUListAsync(bot, cb, ct); return; }
+            if (data.StartsWith("uview:", StringComparison.Ordinal)) { await HandleUViewAsync(bot, cb, data.Substring(6), ct); return; }
+            if (data.StartsWith("ublockask:", StringComparison.Ordinal)) { await HandleUBlockAskAsync(bot, cb, data.Substring(10), ct); return; }
+            if (data.StartsWith("ublockconfirm:", StringComparison.Ordinal)) { await HandleUBlockConfirmAsync(bot, cb, data.Substring(14), ct); return; }
+            if (data.StartsWith("uunblock:", StringComparison.Ordinal)) { await HandleUUnblockAsync(bot, cb, data.Substring(9), ct); return; }
 
             await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct);
         }
@@ -184,6 +249,8 @@ namespace QRAuth.Services
             }
             _lastRequest[userId] = DateTime.UtcNow;
 
+            // short "@user / FirstName" form kept for the compact post-decision line
+            // (MarkHandledAsync) — separate from the richer card built below
             var name = cb.From.Username is { Length: > 0 } uname
                 ? $"@{uname} / {cb.From.FirstName}"
                 : cb.From.FirstName;
@@ -197,13 +264,29 @@ namespace QRAuth.Services
                 }
             });
 
+            var caption = BuildRequestCard(cb.From);
+
+            InputFile? photo = null;
+            try
+            {
+                var photos = await bot.GetUserProfilePhotos(userId, limit: 1, cancellationToken: ct);
+                if (photos.Photos.Length > 0)
+                    photo = InputFile.FromFileId(photos.Photos[0][^1].FileId);
+            }
+            catch (Exception ex)
+            {
+                // no photo / privacy settings hide it — card still works as text-only
+                FileLog.Write($"[TelegramBot] GetUserProfilePhotos failed (tgId={userId})", ex);
+            }
+
             foreach (var adminId in ModInit.conf.admin_ids)
             {
                 try
                 {
-                    await bot.SendMessage(adminId,
-                        $"📩  Запрос доступа от {name} (id={userId}).",
-                        replyMarkup: kb, cancellationToken: ct);
+                    if (photo != null)
+                        await bot.SendPhoto(adminId, photo, caption: caption, parseMode: ParseMode.Html, replyMarkup: kb, cancellationToken: ct);
+                    else
+                        await bot.SendMessage(adminId, caption, parseMode: ParseMode.Html, replyMarkup: kb, cancellationToken: ct);
                 }
                 catch (Exception ex)
                 {
@@ -213,6 +296,224 @@ namespace QRAuth.Services
             }
 
             await bot.AnswerCallbackQuery(cb.Id, "Заявка отправлена администратору.", cancellationToken: ct);
+        }
+
+        /// <summary>All the account info Telegram actually hands us about a requester, laid
+        /// out as a card instead of the old one-line "от Anna (id=...)" — an admin approving
+        /// access is making a judgment call about who this is, so show what's available
+        /// (name, @username, language, Premium) rather than just an id to trust blindly.</summary>
+        static string BuildRequestCard(User u)
+        {
+            var fullName = string.IsNullOrWhiteSpace(u.LastName) ? u.FirstName : $"{u.FirstName} {u.LastName}";
+            var lines = new List<string>
+            {
+                "📥  <b>Новая заявка на доступ</b>",
+                "",
+                $"👤  <b>{HtmlEsc(fullName)}</b>"
+            };
+            if (!string.IsNullOrWhiteSpace(u.Username))
+                lines.Add($"🔗  @{HtmlEsc(u.Username)}");
+            lines.Add($"🆔  <code>{u.Id}</code>");
+            if (!string.IsNullOrWhiteSpace(u.LanguageCode))
+                lines.Add($"🌐  {HtmlEsc(u.LanguageCode)}");
+            if (u.IsPremium)
+                lines.Add("⭐  Telegram Premium");
+
+            return string.Join("\n", lines);
+        }
+
+        static string HtmlEsc(string s) => System.Net.WebUtility.HtmlEncode(s);
+
+        // /users lives in ONE message per admin chat that gets edited in place (list → user
+        // card → block confirm → back to list), never resent — matches the standard Bot API
+        // guidance to edit a message when navigating a menu instead of sending+deleting a new
+        // one each step. Users are addressed by their position in a freshly re-read list, not
+        // by tg_id: hand-added accounts (family members with no Telegram of their own) all
+        // share tg_id=0, so tg_id can't uniquely identify a record to act on.
+        static readonly ConcurrentDictionary<long, int> _usersMenuMessageId = new();
+
+        enum CardMode { View, ConfirmBlock }
+
+        async Task ShowUsersListAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
+        {
+            var users = _repo.ReadAll();
+            var (text, kb) = BuildListView(users);
+            await RenderMenuAsync(bot, chatId, text, kb, ct);
+        }
+
+        async Task ShowUserCardAsync(ITelegramBotClient bot, long chatId, int index, CardMode mode, CancellationToken ct)
+        {
+            var users = _repo.ReadAll();
+            if (index < 0 || index >= users.Count)
+            {
+                // list changed under us (grant/deny/manual edit) — safest fallback is just the list
+                await ShowUsersListAsync(bot, chatId, ct);
+                return;
+            }
+            var (text, kb) = BuildCardView(users[index], index, mode);
+            await RenderMenuAsync(bot, chatId, text, kb, ct);
+        }
+
+        async Task PerformBlockAsync(ITelegramBotClient bot, long chatId, int index, long adminId, CancellationToken ct)
+        {
+            var users = _repo.ReadAll();
+            if (index >= 0 && index < users.Count)
+            {
+                var target = users[index];
+                _repo.RevokeByToken(target.Id);
+                FileLog.Write($"[TelegramBot] Доступ заблокирован вручную: \"{target.Comment}\" (tg_id={target.TgId}), admin={adminId}");
+            }
+            await ShowUsersListAsync(bot, chatId, ct);
+        }
+
+        async Task PerformUnblockAsync(ITelegramBotClient bot, long chatId, int index, long adminId, CancellationToken ct)
+        {
+            var users = _repo.ReadAll();
+            if (index >= 0 && index < users.Count)
+            {
+                var target = users[index];
+                _repo.UnbanByToken(target.Id);
+                FileLog.Write($"[TelegramBot] Доступ разблокирован вручную: \"{target.Comment}\" (tg_id={target.TgId}), admin={adminId}");
+            }
+            await ShowUsersListAsync(bot, chatId, ct);
+        }
+
+        static string UserStatus(LampacUser u) =>
+            u.Ban ? "заблокирован" : (ParseExpiry(u.Expires) >= DateTime.UtcNow ? "активен" : "истёк");
+
+        /// <summary>Edits the admin's tracked menu message if it's still there; falls back to
+        /// sending a fresh one (message too old to edit / chat cleared / first call ever).</summary>
+        async Task RenderMenuAsync(ITelegramBotClient bot, long chatId, string text, InlineKeyboardMarkup? kb, CancellationToken ct)
+        {
+            if (_usersMenuMessageId.TryGetValue(chatId, out var msgId))
+            {
+                try
+                {
+                    await bot.EditMessageText(chatId, msgId, text, replyMarkup: kb, cancellationToken: ct);
+                    return;
+                }
+                catch { /* message gone/too old to edit — send a fresh one below */ }
+            }
+
+            var sent = await bot.SendMessage(chatId, text, replyMarkup: kb, cancellationToken: ct);
+            _usersMenuMessageId[chatId] = sent.MessageId;
+        }
+
+        (string text, InlineKeyboardMarkup? kb) BuildListView(List<LampacUser> users)
+        {
+            if (users.Count == 0)
+                return ("👥  Пользователей нет.", null);
+
+            var rows = new List<InlineKeyboardButton[]>();
+            for (int i = 0; i < users.Count; i++)
+            {
+                var u = users[i];
+                var name = string.IsNullOrWhiteSpace(u.Comment) ? u.TgId.ToString() : u.Comment;
+                var label = $"{Truncate(name, 30)}  |  {UserStatus(u)}";
+                rows.Add(new[] { InlineKeyboardButton.WithCallbackData(label, "uview:" + i) });
+            }
+            return ($"👥  Пользователи ({users.Count})", new InlineKeyboardMarkup(rows));
+        }
+
+        (string text, InlineKeyboardMarkup kb) BuildCardView(LampacUser u, int index, CardMode mode)
+        {
+            var expiresAt = ParseExpiry(u.Expires);
+            var name = string.IsNullOrWhiteSpace(u.Comment) ? u.TgId.ToString() : u.Comment;
+            // token (u.Id — the login password) is deliberately not shown here, this is a
+            // chat log an admin can screenshot/forward
+            var text = $"👤  {name}\nid={u.TgId}\nдоступ до {expiresAt:dd.MM.yyyy HH:mm} UTC · {UserStatus(u)}"
+                + (mode == CardMode.ConfirmBlock ? "\n\n🚫  Заблокировать доступ? Это отключит уже открытую сессию в течение ~1 сек." : "");
+
+            InlineKeyboardButton[] actionRow;
+            if (mode == CardMode.ConfirmBlock)
+            {
+                actionRow = new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🚫  Подтвердить", "ublockconfirm:" + index),
+                    InlineKeyboardButton.WithCallbackData("Отмена", "uview:" + index)
+                };
+            }
+            else if (u.Ban)
+            {
+                // reversible, so no confirm step — blocking (below) is the one-way-ish action
+                // that gets a confirmation, restoring access doesn't need the same friction
+                actionRow = new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🔓  Разблокировать", "uunblock:" + index),
+                    InlineKeyboardButton.WithCallbackData("⬅  Назад", "ulist")
+                };
+            }
+            else
+            {
+                actionRow = new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🚫  Заблокировать", "ublockask:" + index),
+                    InlineKeyboardButton.WithCallbackData("⬅  Назад", "ulist")
+                };
+            }
+
+            return (text, new InlineKeyboardMarkup(new[] { actionRow }));
+        }
+
+        static string Truncate(string s, int max) => s.Length <= max ? s : s.Substring(0, max - 1) + "…";
+
+        async Task HandleUListAsync(ITelegramBotClient bot, CallbackQuery cb, CancellationToken ct)
+        {
+            if (!IsAdmin(cb.From.Id))
+            {
+                await bot.AnswerCallbackQuery(cb.Id, "Недоступно.", showAlert: true, cancellationToken: ct);
+                return;
+            }
+            await ShowUsersListAsync(bot, cb.Message!.Chat.Id, ct);
+            await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct);
+        }
+
+        async Task HandleUViewAsync(ITelegramBotClient bot, CallbackQuery cb, string idxStr, CancellationToken ct)
+        {
+            if (!IsAdmin(cb.From.Id))
+            {
+                await bot.AnswerCallbackQuery(cb.Id, "Недоступно.", showAlert: true, cancellationToken: ct);
+                return;
+            }
+            if (!int.TryParse(idxStr, out var idx)) { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); return; }
+            await ShowUserCardAsync(bot, cb.Message!.Chat.Id, idx, CardMode.View, ct);
+            await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct);
+        }
+
+        async Task HandleUBlockAskAsync(ITelegramBotClient bot, CallbackQuery cb, string idxStr, CancellationToken ct)
+        {
+            if (!IsAdmin(cb.From.Id))
+            {
+                await bot.AnswerCallbackQuery(cb.Id, "Недоступно.", showAlert: true, cancellationToken: ct);
+                return;
+            }
+            if (!int.TryParse(idxStr, out var idx)) { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); return; }
+            await ShowUserCardAsync(bot, cb.Message!.Chat.Id, idx, CardMode.ConfirmBlock, ct);
+            await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct);
+        }
+
+        async Task HandleUBlockConfirmAsync(ITelegramBotClient bot, CallbackQuery cb, string idxStr, CancellationToken ct)
+        {
+            if (!IsAdmin(cb.From.Id))
+            {
+                await bot.AnswerCallbackQuery(cb.Id, "Недоступно.", showAlert: true, cancellationToken: ct);
+                return;
+            }
+            if (!int.TryParse(idxStr, out var idx)) { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); return; }
+            await PerformBlockAsync(bot, cb.Message!.Chat.Id, idx, cb.From.Id, ct);
+            await bot.AnswerCallbackQuery(cb.Id, "Заблокировано.", cancellationToken: ct);
+        }
+
+        async Task HandleUUnblockAsync(ITelegramBotClient bot, CallbackQuery cb, string idxStr, CancellationToken ct)
+        {
+            if (!IsAdmin(cb.From.Id))
+            {
+                await bot.AnswerCallbackQuery(cb.Id, "Недоступно.", showAlert: true, cancellationToken: ct);
+                return;
+            }
+            if (!int.TryParse(idxStr, out var idx)) { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); return; }
+            await PerformUnblockAsync(bot, cb.Message!.Chat.Id, idx, cb.From.Id, ct);
+            await bot.AnswerCallbackQuery(cb.Id, "Разблокировано.", cancellationToken: ct);
         }
 
         async Task HandleGrantAsync(ITelegramBotClient bot, CallbackQuery cb, string tgIdStr, CancellationToken ct)
@@ -249,7 +550,7 @@ namespace QRAuth.Services
             _lastRequest.TryRemove(tgId, out _);
             FileLog.Write($"[TelegramBot] Доступ выдан tgId={tgId} на {days} дн., admin={cb.From.Id}");
             await bot.AnswerCallbackQuery(cb.Id, "✅  Доступ выдан.", cancellationToken: ct);
-            await MarkHandledAsync(bot, cb, "✅  Выдано.", ct);
+            await MarkHandledAsync(bot, cb, "✅", requester, ct);
 
             // if the user requested access from a still-live QR scan, confirming it here
             // logs the deny page in immediately, without the user touching anything —
@@ -286,11 +587,12 @@ namespace QRAuth.Services
                 return;
             }
 
+            var requester = _pendingRequesterNames.TryGetValue(tgId, out var reqName) ? reqName : tgId.ToString();
             _pendingRequesterNames.TryRemove(tgId, out _);
             _pendingQrSessions.TryRemove(tgId, out _);
             _lastRequest.TryRemove(tgId, out _);
             await bot.AnswerCallbackQuery(cb.Id, "Отклонено.", cancellationToken: ct);
-            await MarkHandledAsync(bot, cb, "❌  Отклонено.", ct);
+            await MarkHandledAsync(bot, cb, "❌", requester, ct);
 
             try
             {
@@ -302,12 +604,22 @@ namespace QRAuth.Services
             }
         }
 
-        static async Task MarkHandledAsync(ITelegramBotClient bot, CallbackQuery cb, string suffix, CancellationToken ct)
+        // Replaces the whole request block with one compact line instead of appending a
+        // result under it — appending left a permanently growing 2-line block per request
+        // in the admin's chat (request text never shrank once handled), which is what
+        // made a busy admin's history unreadable.
+        static async Task MarkHandledAsync(ITelegramBotClient bot, CallbackQuery cb, string icon, string requester, CancellationToken ct)
         {
             long chatId = cb.Message?.Chat.Id ?? 0;
             int msgId = cb.Message?.MessageId ?? 0;
-            var original = cb.Message?.Text ?? "";
-            await bot.EditMessageText(chatId, msgId, original + "\n\n" + suffix, cancellationToken: ct);
+            var resultText = $"{icon}  {requester}";
+
+            // the request card can be a photo message now (profile photo attached) — those
+            // take EditMessageCaption, not EditMessageText, or the API rejects the edit
+            if (cb.Message?.Photo is { Length: > 0 })
+                await bot.EditMessageCaption(chatId, msgId, caption: resultText, cancellationToken: ct);
+            else
+                await bot.EditMessageText(chatId, msgId, resultText, cancellationToken: ct);
         }
     }
 }

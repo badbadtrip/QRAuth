@@ -1,4 +1,5 @@
 tools/
 bin/
 obj/
-.claude/settings.local.json
+.claude/
+lampac/

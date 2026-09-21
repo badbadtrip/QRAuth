@@ -131,11 +131,15 @@ namespace QRAuth
             sb.AppendLine("    '#dpc-qr-wrap{position:relative;width:22.5em;height:22.5em;flex-shrink:0;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.35);border-radius:1.9em;padding:0.9em;display:flex;align-items:center;justify-content:center;box-shadow:0 18px 44px rgba(0,0,0,.3);opacity:0;animation:dpcStagger .5s var(--dpc-ease-out) .26s forwards}',");
             sb.AppendLine("    '#dpc-qr-box{position:relative;width:100%;height:100%}',");
             // qr-code-styling рисует SVG с фиксированным пиксельным width/height, снятым один раз
-            // при построении (container.clientWidth). #dpc-qr-wrap задан в em и меняется вместе с
-            // body.fontSize, который Lampa пересчитывает на resize — сама SVG-разметка при этом не
-            // перестраивается, из-за чего QR визуально "сползает"/не совпадает с белой подложкой
-            // после изменения окна. Форсируем 100%/100% с сохранением viewBox — тогда QR всегда
-            // тянется вместе с контейнером, без слушателя на resize и пересборки библиотеки.
+            // при построении (container.clientWidth), и НЕ проставляет viewBox вообще (проверено
+            // в живом DOM: svg.getAttribute('viewBox') === null). Без viewBox форсирование
+            // width/height:100% через CSS не масштабирует уже нарисованные пути — оно просто меняет
+            // видимый viewport, а координаты точек остаются в исходных пиксельных юнитах со сборки,
+            // из-за чего QR "съезжает"/не совпадает с белой подложкой после изменения окна (сама
+            // разметка не перестраивается, а слушателя на resize нет и не должно быть). Раньше тут
+            // был комментарий про "сохранение viewBox" — но сохранять было нечего, его никогда не
+            // было. Реальный фикс: renderQr() сам проставляет viewBox сразу после rendering (см.
+            // ниже) — тогда браузер honestly масштабирует контент под текущий размер контейнера.
             sb.AppendLine("    '#dpc-qr-box svg{display:block!important;width:100%!important;height:100%!important}',");
             sb.AppendLine("    '#dpc-qr-box img{display:block;width:100%;height:auto;border-radius:4px;mix-blend-mode:multiply}',");
             // Same body-text treatment as #dpc-subtitle on the left — regular
@@ -165,7 +169,7 @@ namespace QRAuth
             sb.AppendLine("    '@media(max-width:700px){#dpc{background:transparent;align-items:flex-start}#dpc-content{flex-direction:column}#dpc-l{flex:0 0 auto;overflow:visible}#dpc-r{flex:0 0 auto;width:100%}#dpc-btn{width:100%}}',");
 
             // Reduced motion
-            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-actions,#dpc-steps,#dpc-qrcap,#dpc-qr-wrap,#dpc-qrpill{animation:none!important;opacity:1!important;transform:none!important}}',");
+            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-actions,#dpc-steps,#dpc-qrcap,#dpc-qr-wrap,#dpc-qrpill,#dpc-blocked{animation:none!important;opacity:1!important;transform:none!important}}',");
 
             // TV focus ring — neutral dark (not a muted brand hue) per §10.3: a solid
             // ≥2px ring passes WCAG 2.4.13's area+contrast test on paper regardless of
@@ -186,7 +190,20 @@ namespace QRAuth
             sb.AppendLine("    '#dpc-qrpill:focus,#dpc-qrpill.focus{box-shadow:0 0 0 2px rgba(13,7,16,.9),0 0 0 4px #2CA5E0!important;outline:none}',");
 
             sb.AppendLine("    '.settings-input{z-index:100000!important}',");
-            sb.AppendLine("    '.selectbox{z-index:100001!important}'");
+            sb.AppendLine("    '.selectbox{z-index:100001!important}',");
+
+            // Banned/expired state (checkAutch's denymsg branch) — deliberately NOT the
+            // addDevice() login form: retrying a password can't undo a ban or expiry, so
+            // showing that form would just invite a pointless retry loop. Reuses #dpc/#dpc-w/
+            // #dpc-bg (the same full-bleed card chrome) so it doesn't look like a different,
+            // broken page — just a simple centered message instead of the two-column layout.
+            // min-height matches #dpc-content's own fallback above — without it this block's
+            // height:100% has nothing definite to resolve against (short content, no padding-
+            // driven intrinsic height like the two-column layout has) and it collapses to
+            // near-zero, landing near the top of #dpc-w instead of true vertical center.
+            sb.AppendLine("    '#dpc-blocked{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:460px;text-align:center;gap:1.1em;padding:2em;max-width:34em;margin:0 auto;opacity:0;animation:dpcIn .5s var(--dpc-ease-out) forwards}',");
+            sb.AppendLine("    '#dpc-blocked-title{font-size:1.85em;font-weight:800;color:#fbfaff;margin:0;letter-spacing:-.3px}',");
+            sb.AppendLine("    '#dpc-blocked-msg{font-size:1em;color:#c9c4dd;line-height:1.6;margin:0;max-width:32ch}'");
 
             sb.AppendLine("  ].join('');");
             sb.AppendLine("  document.head.appendChild(s);");
@@ -254,6 +271,11 @@ namespace QRAuth
             sb.AppendLine("          backgroundOptions: { color: 'transparent' }");
             sb.AppendLine("        });");
             sb.AppendLine("        qr.append(container);");
+            // qr-code-styling's <svg> has no viewBox (see #dpc-qr-box svg CSS comment above) —
+            // add one ourselves so the width/height:100% CSS actually rescales the drawn QR
+            // instead of just resizing an unscaled viewport around static-coordinate paths.
+            sb.AppendLine("        var builtSvg = container.querySelector('svg');");
+            sb.AppendLine("        if (builtSvg && !builtSvg.getAttribute('viewBox')) builtSvg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);");
             sb.AppendLine("      } catch (e) { fallback(); }");
             sb.AppendLine("    }");
             sb.AppendLine("    if (window.QRCodeStyling) { build(); return; }");
@@ -561,6 +583,22 @@ namespace QRAuth
             sb.AppendLine("}");
             sb.AppendLine();
 
+            // ── showBlocked ─────────────────────────────────────────────────
+            // Rendered instead of addDevice() when the server already gave a firm reason
+            // (ban or expiry) — no password field, nothing to retry.
+            sb.AppendLine("function showBlocked(msg) {");
+            sb.AppendLine("  if (document.getElementById('dpc')) return;");
+            sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\"><div id=\"dpc-bg\"></div>'");
+            sb.AppendLine("    + '<div id=\"dpc-blocked\">'");
+            sb.AppendLine("    + '<h1 id=\"dpc-blocked-title\"></h1>'");
+            sb.AppendLine("    + '<p id=\"dpc-blocked-msg\"></p>'");
+            sb.AppendLine("    + '</div></div></div>';");
+            sb.AppendLine("  document.body.insertAdjacentHTML('beforeend', html);");
+            sb.AppendLine("  document.getElementById('dpc-blocked-title').textContent = 'Доступ заблокирован';");
+            sb.AppendLine("  document.getElementById('dpc-blocked-msg').textContent = msg || '';");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
             // ── checkAutch ───────────────────────────────────────────────────
             sb.AppendLine("function checkAutch() {");
             sb.AppendLine("  var url = '{localhost}/testaccsdb';");
@@ -581,7 +619,8 @@ namespace QRAuth
             sb.AppendLine("      document.getElementById('app').style.display = 'none';");
             sb.AppendLine("      var _pw = document.getElementById('loading-element');");
             sb.AppendLine("      if (_pw) _pw.style.display = 'none';");
-            sb.AppendLine("      if (!res.denymsg) { setTimeout(function() { addDevice(res.msg); }, 500); }");
+            sb.AppendLine("      if (res.denymsg) { showBlocked(res.denymsg); }");
+            sb.AppendLine("      else { setTimeout(function() { addDevice(res.msg); }, 500); }");
             sb.AppendLine("    } else {");
             sb.AppendLine("      network.clear(); network = null;");
             sb.AppendLine("    }");

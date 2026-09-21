@@ -89,6 +89,26 @@ namespace QRAuth.Services
                 _logger.LogWarning(ex, "[TelegramBot] SetMyCommands warning");
             }
 
+            // /users only shows in the menu for admins (chat-scoped command list) — everyone
+            // else keeps the plain default set above, HandleMessageAsync's IsAdmin check is
+            // the actual enforcement, this is just menu discoverability.
+            foreach (var adminId in ModInit.conf.admin_ids)
+            {
+                try
+                {
+                    await bot.SetMyCommands(new[]
+                    {
+                        new Telegram.Bot.Types.BotCommand { Command = "start", Description = "Подтвердить вход по QR" },
+                        new Telegram.Bot.Types.BotCommand { Command = "users", Description = "Список пользователей" }
+                    }, scope: new Telegram.Bot.Types.BotCommandScopeChat { ChatId = adminId }, cancellationToken: ct).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // admin hasn't started the bot yet / chat unreachable — non-fatal, same as notify-admin failures elsewhere
+                    _logger.LogWarning(ex, "[TelegramBot] SetMyCommands (admin scope) warning, adminId={AdminId}", adminId);
+                }
+            }
+
             _logger.LogInformation("[TelegramBot] Long polling запущен (limit={Limit}, timeout={Timeout}s).",
                 GetUpdatesLimit, GetUpdatesTimeoutSeconds);
 
