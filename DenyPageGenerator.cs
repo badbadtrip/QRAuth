@@ -236,14 +236,27 @@ namespace QRAuth
             // Скруглённые точки/логотип по центру QR даёт только клиентская отрисовка —
             // api.qrserver.com отдаёт только плоскую растровую картинку без стилизации.
             // Библиотека грузится лениво (лежит на CDN, не бандлится в плагин).
+            // renderQr() is called twice for the same container: once immediately with the
+            // static tgUrl, then again from startQrAuth() once the session dynUrl is back.
+            // Both paths are async (CDN script load / fetch round-trip), so without a guard
+            // whichever settles second wins the write but doesn't cancel the other's in-flight
+            // load — two <script> tags, two onloads, two qr.append(container) calls with no
+            // clear between them, producing two overlapping/offset QR codes. A per-container
+            // generation counter makes a stale call's build()/fallback() a no-op, and a single
+            // shared CDN-load promise (instead of one <script> tag per call) means only the
+            // winning generation's build() ever runs.
             sb.AppendLine("  function renderQr(container, url) {");
-            sb.AppendLine("    container.innerHTML = '';");
+            sb.AppendLine("    var gen = (container._dpcQrGen = (container._dpcQrGen || 0) + 1);");
             sb.AppendLine("    function fallback() {");
+            sb.AppendLine("      if (container._dpcQrGen !== gen) return;");
+            sb.AppendLine("      container.innerHTML = '';");
             sb.AppendLine("      container.insertAdjacentHTML('beforeend',");
             sb.AppendLine("        '<img src=\"https://api.qrserver.com/v1/create-qr-code/?size=" + qrSize + "x" + qrSize + "&ecc=M&margin=4&data=' + encodeURIComponent(url) + '\" loading=\"lazy\" />');");
             sb.AppendLine("    }");
             sb.AppendLine("    function build() {");
+            sb.AppendLine("      if (container._dpcQrGen !== gen) return;");
             sb.AppendLine("      try {");
+            sb.AppendLine("        container.innerHTML = '';");
             sb.AppendLine("        var size = (container.clientWidth || 162) - 0;");
             sb.AppendLine("        var qr = new QRCodeStyling({");
             sb.AppendLine("          width: size,");
@@ -279,11 +292,16 @@ namespace QRAuth
             sb.AppendLine("      } catch (e) { fallback(); }");
             sb.AppendLine("    }");
             sb.AppendLine("    if (window.QRCodeStyling) { build(); return; }");
-            sb.AppendLine("    var sc = document.createElement('script');");
-            sb.AppendLine("    sc.src = 'https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js';");
-            sb.AppendLine("    sc.onload = build;");
-            sb.AppendLine("    sc.onerror = fallback;");
-            sb.AppendLine("    document.head.appendChild(sc);");
+            sb.AppendLine("    if (!window._dpcQrLoad) {");
+            sb.AppendLine("      window._dpcQrLoad = new Promise(function(resolve, reject) {");
+            sb.AppendLine("        var sc = document.createElement('script');");
+            sb.AppendLine("        sc.src = 'https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js';");
+            sb.AppendLine("        sc.onload = resolve;");
+            sb.AppendLine("        sc.onerror = reject;");
+            sb.AppendLine("        document.head.appendChild(sc);");
+            sb.AppendLine("      });");
+            sb.AppendLine("    }");
+            sb.AppendLine("    window._dpcQrLoad.then(build, fallback);");
             sb.AppendLine("  }");
             sb.AppendLine();
 
