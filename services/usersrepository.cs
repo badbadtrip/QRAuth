@@ -54,9 +54,15 @@ namespace QRAuth.Services
         public LampacUser? GetByTgId(long tgId) =>
             ReadAll().FirstOrDefault(u => u.TgId == tgId);
 
+        // Lampac core's Accsdb middleware still gates access on `expires` (see
+        // lampac/Core/Middlewares/Accsdb.cs) — it's not a field we can drop from the record.
+        // We just stop offering any control over it: every grant gets this fixed far-future
+        // value, so the only thing that can ever end access is Ban (RevokeByToken).
+        static readonly string NoExpiry = DateTime.UtcNow.AddYears(100).ToString("O");
+
         /// <summary>Grants a fresh token to a Telegram id, replacing any existing record for
         /// that id. Returns the generated token (the password the user logs in with).</summary>
-        public string AddUser(long tgId, TimeSpan validFor, string comment)
+        public string AddUser(long tgId, string comment)
         {
             lock (_writeLock)
             {
@@ -69,7 +75,7 @@ namespace QRAuth.Services
                     Id      = token,
                     TgId    = tgId,
                     Group   = 1,
-                    Expires = (DateTime.UtcNow + validFor).ToString("O"),
+                    Expires = NoExpiry,
                     Comment = comment
                 });
 

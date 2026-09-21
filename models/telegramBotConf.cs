@@ -16,8 +16,5 @@ namespace QRAuth.Models
 
         /// <summary>Telegram ids allowed to grant/deny access requests.</summary>
         public long[] admin_ids { get; set; } = Array.Empty<long>();
-
-        /// <summary>How many days an access grant is valid for.</summary>
-        public int default_access_days { get; set; } = 30;
     }
 }
