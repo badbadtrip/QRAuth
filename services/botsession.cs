@@ -257,6 +257,32 @@ namespace QRAuth.Services
             long chatId = cb.Message?.Chat.Id ?? 0;
             int msgId = cb.Message?.MessageId ?? 0;
             await bot.EditMessageText(chatId, msgId, "✅  Вход подтверждён. Вернитесь на экран входа Lampa.", cancellationToken: ct);
+
+            var lines = new List<string>
+            {
+                "🔓  <b>QR-вход подтверждён</b>",
+                $"👤  <b>{HtmlEsc(user.Comment)}</b>",
+                $"🆔  <code>{user.TgId}</code>"
+            };
+            await NotifyAdminsAsync(bot, string.Join("\n", lines), skipTgId: cb.From.Id, ct);
+        }
+
+        /// <summary>Best-effort admin broadcast — one admin's unreachable chat (never started
+        /// the bot / blocked it) must not stop the others from being notified.</summary>
+        async Task NotifyAdminsAsync(ITelegramBotClient bot, string text, long skipTgId, CancellationToken ct)
+        {
+            foreach (var adminId in ModInit.conf.admin_ids)
+            {
+                if (adminId == skipTgId) continue;
+                try
+                {
+                    await bot.SendMessage(adminId, text, parseMode: ParseMode.Html, cancellationToken: ct);
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Write($"[TelegramBot] notify admin {adminId} failed", ex);
+                }
+            }
         }
 
         async Task HandleRequestAccessAsync(ITelegramBotClient bot, CallbackQuery cb, CancellationToken ct)

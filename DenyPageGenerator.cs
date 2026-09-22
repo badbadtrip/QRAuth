@@ -489,6 +489,8 @@ namespace QRAuth
             sb.AppendLine("          };");
             sb.AppendLine("        } else {");
             sb.AppendLine("          Lampa.Storage.set('lampac_unic_id', val);");
+            // fire-and-forget — admin login notification, must not delay/break the actual login
+            sb.AppendLine("          (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/login-ping?token=' + encodeURIComponent(val), function(){}, function(){});");
             sb.AppendLine("          waitAuthorized(function() {");
             sb.AppendLine("            localStorage.removeItem('activity');");
             sb.AppendLine("            window.location.href = '/';");
