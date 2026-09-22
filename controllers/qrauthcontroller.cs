@@ -67,7 +67,6 @@ namespace QRAuth.Controllers
 
             foreach (var adminId in ModInit.conf.admin_ids)
             {
-                if (adminId == user.TgId) continue;
                 try
                 {
                     await bot.SendMessage(adminId, text, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);

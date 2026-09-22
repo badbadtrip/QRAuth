@@ -392,7 +392,7 @@ namespace QRAuth
                 sb.AppendLine("      qrNet.silent('{localhost}/tgbot/qr/status?session=' + encodeURIComponent(qrSessionId), function(res) {");
                 sb.AppendLine("        if (res && res.status === 'confirmed' && res.token) {");
                 sb.AppendLine("          stopQrPoll();");
-                sb.AppendLine("          if (_btn && !_btn.disabled) doLogin(res.token);");
+                sb.AppendLine("          if (_btn && !_btn.disabled) doLogin(res.token, true);");
                 sb.AppendLine("        } else if (res && res.status === 'expired') {");
                 sb.AppendLine("          stopQrPoll();");
                 sb.AppendLine("          startQrAuth();");
@@ -456,7 +456,7 @@ namespace QRAuth
             sb.AppendLine();
 
             // ── doLogin ──────────────────────────────────────────────────────
-            sb.AppendLine("  function doLogin(val) {");
+            sb.AppendLine("  function doLogin(val, viaQr) {");
             sb.AppendLine("    if (!val) return;");
             sb.AppendLine();
             sb.AppendLine("    _btn.disabled = true;");
@@ -489,8 +489,10 @@ namespace QRAuth
             sb.AppendLine("          };");
             sb.AppendLine("        } else {");
             sb.AppendLine("          Lampa.Storage.set('lampac_unic_id', val);");
-            // fire-and-forget — admin login notification, must not delay/break the actual login
-            sb.AppendLine("          (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/login-ping?token=' + encodeURIComponent(val), function(){}, function(){}, {});");
+            // fire-and-forget — admin login notification, must not delay/break the actual login.
+            // Skipped for a QR-confirmed login: the bot already sent the "QR-вход подтверждён"
+            // card the moment the button was tapped, so a second ping here would double it up.
+            sb.AppendLine("          if (!viaQr) (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/login-ping?token=' + encodeURIComponent(val), function(){}, function(){}, {});");
             sb.AppendLine("          waitAuthorized(function() {");
             sb.AppendLine("            localStorage.removeItem('activity');");
             sb.AppendLine("            window.location.href = '/';");
