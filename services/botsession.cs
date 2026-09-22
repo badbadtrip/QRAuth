@@ -264,16 +264,17 @@ namespace QRAuth.Services
                 $"👤  <b>{HtmlEsc(user.Comment)}</b>",
                 $"🆔  <code>{user.TgId}</code>"
             };
-            await NotifyAdminsAsync(bot, string.Join("\n", lines), skipTgId: cb.From.Id, ct);
+            await NotifyAdminsAsync(bot, string.Join("\n", lines), ct);
         }
 
         /// <summary>Best-effort admin broadcast — one admin's unreachable chat (never started
-        /// the bot / blocked it) must not stop the others from being notified.</summary>
-        async Task NotifyAdminsAsync(ITelegramBotClient bot, string text, long skipTgId, CancellationToken ct)
+        /// the bot / blocked it) must not stop the others from being notified. Includes an
+        /// admin who is himself the one logging in — the edited "Вход подтверждён" text left
+        /// in his chat is not this card, so he'd otherwise never see the login notification.</summary>
+        async Task NotifyAdminsAsync(ITelegramBotClient bot, string text, CancellationToken ct)
         {
             foreach (var adminId in ModInit.conf.admin_ids)
             {
-                if (adminId == skipTgId) continue;
                 try
                 {
                     await bot.SendMessage(adminId, text, parseMode: ParseMode.Html, cancellationToken: ct);
