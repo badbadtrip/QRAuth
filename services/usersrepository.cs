@@ -54,6 +54,9 @@ namespace QRAuth.Services
         public LampacUser? GetByTgId(long tgId) =>
             ReadAll().FirstOrDefault(u => u.TgId == tgId);
 
+        public LampacUser? GetByToken(string token) =>
+            ReadAll().FirstOrDefault(u => u.Id == token);
+
         // Lampac core's Accsdb middleware still gates access on `expires` (see
         // lampac/Core/Middlewares/Accsdb.cs) — it's not a field we can drop from the record.
         // We just stop offering any control over it: every grant gets this fixed far-future

@@ -12,6 +12,12 @@ namespace QRAuth.Services
 {
     public sealed class TelegramBotHostedService : BackgroundService
     {
+        /// <summary>Set once the bot is up so QrAuthController — a plain HTTP controller with
+        /// no DI access to the bot instance — can push a login notification. Null whenever the
+        /// bot is disabled/not yet connected; callers must treat that as "nothing to notify".</summary>
+        public static TelegramBotClient? Bot;
+        public static UsersRepository? Repo;
+
         const int GetUpdatesLimit          = 100;
         const int GetUpdatesTimeoutSeconds = 50;
         static readonly TimeSpan ErrorDelay = TimeSpan.FromSeconds(5);
@@ -67,6 +73,9 @@ namespace QRAuth.Services
                 FileLog.Write("[TelegramBot] GetMe не удался", ex);
                 return;
             }
+
+            Bot  = bot;
+            Repo = repo;
 
             try
             {
@@ -149,6 +158,9 @@ namespace QRAuth.Services
                     }
                 }
             }
+
+            Bot  = null;
+            Repo = null;
         }
     }
 }

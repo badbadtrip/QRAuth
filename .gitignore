@@ -1,5 +1,5 @@
-tools/
-bin/
-obj/
-.claude/
-lampac/
+tools
+bin
+obj
+.claude
+lampac

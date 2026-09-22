@@ -1,4 +1,7 @@
+using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Telegram.Bot;
 using QRAuth.Services;
 
 namespace QRAuth.Controllers
@@ -33,6 +36,49 @@ namespace QRAuth.Controllers
 
             var (status, token) = QrAuthSessions.ConsumeIfConfirmed(session);
             return Ok(new { status, token });
+        }
+
+        /// <summary>Fire-and-forget ping from the deny-page password form (see doLogin() in
+        /// DenyPageGenerator.cs) — the only way this module learns about a plain-password
+        /// login, since that request goes straight to Lampac's own /testaccsdb and never
+        /// touches this module otherwise. Always 200s so a missing/unknown token can't be
+        /// used to probe which tokens exist.</summary>
+        [HttpPost("login-ping")]
+        public async Task<ActionResult> LoginPing([FromQuery] string token)
+        {
+            if (!ModInit.conf.enable || string.IsNullOrWhiteSpace(token))
+                return Ok();
+
+            var bot  = TelegramBotHostedService.Bot;
+            var repo = TelegramBotHostedService.Repo;
+            if (bot == null || repo == null)
+                return Ok();
+
+            var user = repo.GetByToken(token);
+            if (user == null)
+                return Ok();
+
+            var text = string.Join("\n", new[]
+            {
+                "🔑  <b>Вход по паролю</b>",
+                $"👤  <b>{System.Net.WebUtility.HtmlEncode(user.Comment)}</b>",
+                $"🆔  <code>{user.TgId}</code>"
+            });
+
+            foreach (var adminId in ModInit.conf.admin_ids)
+            {
+                if (adminId == user.TgId) continue;
+                try
+                {
+                    await bot.SendMessage(adminId, text, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Write($"[TelegramBot] notify admin {adminId} failed", ex);
+                }
+            }
+
+            return Ok();
         }
     }
 }
