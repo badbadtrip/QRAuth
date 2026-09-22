@@ -217,7 +217,7 @@ deny.js:  поллинг GET /tgbot/qr/status?session=... → { status: confirme
 dotnet build QRAuth.csproj
 ```
 
-Требует .NET 10 SDK. Архитектура и порядок добавления новых полей - в [CLAUDE.md](CLAUDE.md).
+Требует .NET 10 SDK.
 
 ---
 
