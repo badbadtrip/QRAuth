@@ -38,16 +38,22 @@ namespace QRAuth.Services
 
         public List<LampacUser> ReadAll()
         {
-            try
+            // shares _writeLock with Add/RevokeByToken/UnbanByToken so a read never lands
+            // mid File.WriteAllText and sees a truncated file (Monitor is reentrant, so a
+            // write's own ReadAll-then-mutate-then-write nests fine on the same thread)
+            lock (_writeLock)
             {
-                if (!File.Exists(_path)) return new();
-                var json = File.ReadAllText(_path);
-                return JsonSerializer.Deserialize<List<LampacUser>>(json) ?? new();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[TelegramBot] ReadUsers error");
-                return new();
+                try
+                {
+                    if (!File.Exists(_path)) return new();
+                    var json = File.ReadAllText(_path);
+                    return JsonSerializer.Deserialize<List<LampacUser>>(json) ?? new();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[TelegramBot] ReadUsers error");
+                    return new();
+                }
             }
         }
 
