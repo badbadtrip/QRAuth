@@ -15,8 +15,8 @@ namespace QRAuth.Services
         /// <summary>Set once the bot is up so QrAuthController — a plain HTTP controller with
         /// no DI access to the bot instance — can push a login notification. Null whenever the
         /// bot is disabled/not yet connected; callers must treat that as "nothing to notify".</summary>
-        public static TelegramBotClient? Bot;
-        public static UsersRepository? Repo;
+        public static volatile TelegramBotClient? Bot;
+        public static volatile UsersRepository? Repo;
 
         const int GetUpdatesLimit          = 100;
         const int GetUpdatesTimeoutSeconds = 50;
