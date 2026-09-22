@@ -356,6 +356,15 @@ namespace QRAuth.Services
             }
 
             await bot.AnswerCallbackQuery(cb.Id, "Заявка отправлена администратору.", cancellationToken: ct);
+
+            try
+            {
+                await bot.SendMessage(userId, "📨  Заявка на доступ отправлена администратору. Ждите решения.", cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                FileLog.Write($"[TelegramBot] notify user {userId} failed (reqaccess ack)", ex);
+            }
         }
 
         /// <summary>Self-service password re-issue — an approved user's password (the record's
@@ -637,7 +646,7 @@ namespace QRAuth.Services
             _lastRequest.TryRemove(tgId, out _);
             FileLog.Write($"[TelegramBot] Доступ выдан tgId={tgId}, admin={cb.From.Id}");
             await bot.AnswerCallbackQuery(cb.Id, "✅  Доступ выдан.", cancellationToken: ct);
-            await MarkHandledAsync(bot, cb, "✅", requester, ct);
+            await TryMarkHandledAsync(bot, cb, "✅", requester, ct);
 
             // if the user requested access from a still-live QR scan, confirming it here
             // logs the deny page in immediately, without the user touching anything —
@@ -679,7 +688,7 @@ namespace QRAuth.Services
             _pendingQrSessions.TryRemove(tgId, out _);
             _lastRequest.TryRemove(tgId, out _);
             await bot.AnswerCallbackQuery(cb.Id, "Отклонено.", cancellationToken: ct);
-            await MarkHandledAsync(bot, cb, "❌", requester, ct);
+            await TryMarkHandledAsync(bot, cb, "❌", requester, ct);
 
             try
             {
@@ -695,18 +704,30 @@ namespace QRAuth.Services
         // result under it — appending left a permanently growing 2-line block per request
         // in the admin's chat (request text never shrank once handled), which is what
         // made a busy admin's history unreadable.
-        static async Task MarkHandledAsync(ITelegramBotClient bot, CallbackQuery cb, string icon, string requester, CancellationToken ct)
+        //
+        // Best-effort: purely cosmetic (tidies the admin's own chat), so a failure here
+        // (message too old to edit, cb.Message missing after a bot restart, etc.) must
+        // not stop the caller from going on to actually notify the requesting user —
+        // grant/deny already happened in users.json regardless of whether this succeeds.
+        static async Task TryMarkHandledAsync(ITelegramBotClient bot, CallbackQuery cb, string icon, string requester, CancellationToken ct)
         {
-            long chatId = cb.Message?.Chat.Id ?? 0;
-            int msgId = cb.Message?.MessageId ?? 0;
-            var resultText = $"{icon}  {requester}";
+            try
+            {
+                long chatId = cb.Message?.Chat.Id ?? 0;
+                int msgId = cb.Message?.MessageId ?? 0;
+                var resultText = $"{icon}  {requester}";
 
-            // the request card can be a photo message now (profile photo attached) — those
-            // take EditMessageCaption, not EditMessageText, or the API rejects the edit
-            if (cb.Message?.Photo is { Length: > 0 })
-                await bot.EditMessageCaption(chatId, msgId, caption: resultText, cancellationToken: ct);
-            else
-                await bot.EditMessageText(chatId, msgId, resultText, cancellationToken: ct);
+                // the request card can be a photo message now (profile photo attached) — those
+                // take EditMessageCaption, not EditMessageText, or the API rejects the edit
+                if (cb.Message?.Photo is { Length: > 0 })
+                    await bot.EditMessageCaption(chatId, msgId, caption: resultText, cancellationToken: ct);
+                else
+                    await bot.EditMessageText(chatId, msgId, resultText, cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                FileLog.Write("[TelegramBot] TryMarkHandledAsync failed", ex);
+            }
         }
     }
 }
