@@ -38,6 +38,32 @@ namespace QRAuth.Controllers
             return Ok(new { status, token });
         }
 
+        /// <summary>Poster wall manifest for the deny page (see PosterWall). count=0 means
+        /// "no wall" — the page keeps its plain gradient background.</summary>
+        [HttpGet("posters")]
+        public ActionResult Posters()
+        {
+            if (!ModInit.denyConf.poster_wall)
+                return Ok(new { count = 0, v = 0, state = "disabled" });
+
+            return Ok(new { count = PosterWall.Count, v = PosterWall.Version, state = PosterWall.State });
+        }
+
+        // No ".jpg" in the route on purpose: Lampac's accsdb middleware 404s any *.jpg
+        // for an unauthorized visitor (IsStaticAsset) BEFORE module Accsdb handlers run,
+        // so an extension here would make ModInit.AllowQrRoutes unable to let it through.
+        [HttpGet("poster/{n:int}")]
+        public ActionResult Poster(int n)
+        {
+            string path = PosterWall.FilePath(n);
+            if (path == null)
+                return NotFound();
+
+            // ?v= in the page URL changes with every refreshed set, so a long cache is safe.
+            Response.Headers.CacheControl = "public, max-age=86400";
+            return PhysicalFile(path, "image/jpeg");
+        }
+
         /// <summary>Fire-and-forget ping from the deny-page password form (see doLogin() in
         /// DenyPageGenerator.cs) — the only way this module learns about a plain-password
         /// login, since that request goes straight to Lampac's own /testaccsdb and never

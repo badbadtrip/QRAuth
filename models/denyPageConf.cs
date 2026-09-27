@@ -12,5 +12,7 @@ namespace QRAuth.Models
         public string qr_caption      { get; set; } = "";
         public string qr_subcaption   { get; set; } = "";
         public string tg_button_text  { get; set; } = "";
+        public bool   poster_wall     { get; set; } = true;
+        public string poster_source   { get; set; } = "trending";
     }
 }

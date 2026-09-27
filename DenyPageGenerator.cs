@@ -23,7 +23,6 @@ namespace QRAuth
             string jsSub    = Js(string.IsNullOrWhiteSpace(conf.page_subtitle)  ? "Доступ ограничен. Пароль можно получить у администратора." : conf.page_subtitle);
             string jsStep1  = Js(string.IsNullOrWhiteSpace(conf.step1_text)     ? "Нажмите «Войти по паролю»" : conf.step1_text);
             string jsStep2  = Js(string.IsNullOrWhiteSpace(conf.step2_text)     ? "Введите пароль, который выдал администратор, и подтвердите" : conf.step2_text);
-            string jsQrCap  = Js(string.IsNullOrWhiteSpace(conf.qr_caption)     ? "Быстрый вход" : conf.qr_caption);
             // The QR is a login method now (startQrAuth → bot confirm → doLogin), not a
             // "get a password from the bot" link, so the default copy says what it does.
             string jsQrSub  = Js(string.IsNullOrWhiteSpace(conf.qr_subcaption)  ? "Наведите камеру телефона и подтвердите вход в Telegram" : conf.qr_subcaption);
@@ -48,35 +47,45 @@ namespace QRAuth
             sb.AppendLine("    '#dpc{color-scheme:dark;position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:\"Manrope\",\"Segoe UI\",system-ui,sans-serif;color:var(--dpc-ink);padding:0;box-sizing:border-box;overflow:auto;background:#050308}',");
             sb.AppendLine("    '@keyframes dpcIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}',");
             sb.AppendLine("    '@keyframes dpcStagger{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',");
-            // Status-dot breathing / QR skeleton sweep — opacity or transform only, so they
+            // QR skeleton sweep — opacity or transform only, so they
             // stay on the compositor even on weak TV GPUs.
-            sb.AppendLine("    '@keyframes dpcBreath{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}',");
             sb.AppendLine("    '@keyframes dpcSweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}',");
 
             // Card
             sb.AppendLine("    '#dpc-w{position:relative;overflow:hidden;width:100%;height:100%;background:var(--dpc-base);animation:dpcIn .5s var(--dpc-ease-out)}',");
 
-            // Blob layer — percentage-sized radial-gradients directly on the background,
-            // not fixed-px blurred circles pinned to the right edge. Fixed-px blobs made sense
-            // on the old ~1040px-capped card (they overlapped into one wash); on a full-bleed,
-            // width:100% card they end up scattered in separate corners with dead space between
-            // (see docs/auth-ux-guidelines.md — logged as a concrete case of the same "don't tie
-            // decorative sizing to an assumed container width" mistake as the TV/desktop bug).
-            // Percentage radii scale with the box, so this always reads as one cohesive wash.
-            // blur(60px) over a near-fullscreen area is a heavy filter op on weak TV
-            // GPUs; 40px still reads as a soft wash (the radial-gradients already fade
-            // to transparent well before their own edges, so most of the softness comes
-            // from the gradient stops, not the blur radius) but is cheaper to composite.
-            sb.AppendLine("    '#dpc-bg{position:absolute;inset:-10%;overflow:hidden;z-index:0;pointer-events:none;filter:blur(40px);background:radial-gradient(65% 60% at 100% 6%,#ff8fd0 0%,#c13bea 42%,transparent 78%),radial-gradient(62% 68% at 100% 94%,#ff5ea8 0%,#7b2ff7 44%,transparent 80%),radial-gradient(46% 52% at 106% 50%,#c13bea 0%,#4b1fb0 46%,transparent 82%)}',");
-            sb.AppendLine("    '#dpc-bg::after{content:\\'\\';position:absolute;inset:0;background:linear-gradient(112deg,var(--dpc-base) 0%,var(--dpc-base) 38%,rgba(13,7,16,.55) 56%,rgba(13,7,16,0) 78%)}',");
+            // Neutral "cinema" backdrop: no hue of its own — when the poster wall is on, the
+            // posters are the only colour on screen (a tinted wash over them just turns them
+            // muddy). Without posters: a barely-there light lift top-right so the flat black
+            // doesn't look like a failed load. No filter:blur — cheapest possible layer.
+            sb.AppendLine("    '#dpc-bg{position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;background:radial-gradient(60% 55% at 78% 30%,rgba(255,255,255,.07) 0%,rgba(255,255,255,0) 70%),radial-gradient(80% 60% at 50% 120%,rgba(255,255,255,.04) 0%,rgba(255,255,255,0) 70%)}',");
+
+            // Poster wall (PosterWall service → /tgbot/qr/poster/{n}). One transform on
+            // the whole wall (a single composited layer), no per-poster animation — the
+            // cheapest way to get the tilted Netflix look on weak TV GPUs. Explicit
+            // top/left/width/height instead of `inset` for old TV engines. The wall is
+            // texture, not content: one static brightness/saturation filter on the whole
+            // layer knocks it back evenly (rasterized once, never re-run). Hidden until
+            // enough posters decoded (.dpc-has-posters). #dpc-shade: solid-ish dark zone
+            // under the left column (text never sits on a busy poster), fading to a
+            // uniform dim toward the right, plus top/bottom fade and an edge vignette.
+            if (conf.poster_wall)
+            {
+                sb.AppendLine("    '#dpc-posters{position:absolute;top:-25%;left:-15%;width:130%;height:150%;z-index:0;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;opacity:0;-webkit-filter:brightness(.55) saturate(.75);filter:brightness(.55) saturate(.75);transform:perspective(1400px) rotateX(14deg) rotateZ(-7deg);transition:opacity 1.2s var(--dpc-ease-out)}',");
+                sb.AppendLine("    '#dpc-posters img{display:block;width:7.73%;height:auto;margin:.3%;border-radius:.45em}',");
+                sb.AppendLine("    '#dpc-shade{display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;background:radial-gradient(130% 100% at 62% 50%,rgba(10,10,11,0) 55%,rgba(10,10,11,.75) 100%),linear-gradient(0deg,rgba(10,10,11,.92) 0%,rgba(10,10,11,0) 30%,rgba(10,10,11,0) 75%,rgba(10,10,11,.6) 100%),linear-gradient(90deg,rgba(10,10,11,.94) 0%,rgba(10,10,11,.9) 32%,rgba(10,10,11,.58) 56%,rgba(10,10,11,.5) 100%)}',");
+                sb.AppendLine("    '.dpc-has-posters #dpc-posters{opacity:1}.dpc-has-posters #dpc-shade{display:block}.dpc-has-posters #dpc-bg{display:none}',");
+                // Narrow screens: 4 posters per row, otherwise they shrink to thumbnails; flat
+                // heavier shade since the stacked layout has text across the full width.
+                sb.AppendLine("    '@media(max-width:700px){#dpc-posters img{width:24.4%}#dpc-shade{background:rgba(10,10,11,.8)}}',");
+            }
 
             // Content grid
-            // max-width + auto margins keeps the two columns from drifting apart on huge
-            // monitors (em-based, same "don't stretch on huge monitors" reasoning as the
-            // ch-unit text caps below — see CLAUDE.md). Since 1em tracks innerWidth via
-            // Lampa's own body-fontSize formula, this is a fixed viewport fraction on every
-            // screen, not a px/vw breakpoint.
-            sb.AppendLine("    '#dpc-content{position:relative;z-index:1;display:flex;gap:0;height:100%;min-height:460px;max-width:72em;margin:0 auto}',");
+            // Full width, no max-width cap: since 1em tracks innerWidth (Lampa's body
+            // font-size formula), side paddings in em are already a fixed viewport fraction
+            // on every screen. The old 72em cap only added ~7% dead space on each side.
+            // Side padding 4.5em (~5% of width) doubles as TV overscan safe area.
+            sb.AppendLine("    '#dpc-content{position:relative;z-index:1;display:flex;gap:0;height:100%;min-height:460px}',");
 
             // Left column. Sizes are in `em`, not `px`/`vw`/media-query breakpoints — `#dpc` is
             // appended straight onto <body>, and Lampa itself already sets body's font-size to
@@ -87,7 +96,7 @@ namespace QRAuth
             // in Settings — so inheriting it via `em` means this page always matches the scale of
             // the rest of the app on that exact device, with zero platform-detection of our own.
             // Do not set an explicit font-size anywhere above #dpc-title, or the em chain breaks.
-            sb.AppendLine("    '#dpc-l{flex:1;padding:3.15em 2.93em;display:flex;flex-direction:column;justify-content:center;gap:1.35em;overflow-y:auto;min-width:0}',");
+            sb.AppendLine("    '#dpc-l{flex:1;padding:3.15em 2.93em 3.15em 4.5em;display:flex;flex-direction:column;justify-content:center;gap:1.35em;overflow-y:auto;min-width:0}',");
             sb.AppendLine("    '#dpc-logo{display:flex;align-items:center;gap:0.68em;opacity:0;animation:dpcStagger .4s var(--dpc-ease-out) .05s forwards}',");
             sb.AppendLine("    '#dpc-logo-mark{width:1.73em;height:1.73em;flex-shrink:0}',");
             sb.AppendLine("    '#dpc-logo-mark svg{display:block;width:100%;height:100%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))}',");
@@ -116,7 +125,7 @@ namespace QRAuth
             // #dpc-btn is the white primary, #dpc-tgbtn the translucent secondary below it.
             sb.AppendLine("    '.dpc-b{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:0.75em;width:auto;align-self:flex-start;padding:1.2em 2.25em;box-sizing:border-box;border:none;border-radius:999px;font-family:inherit;font-size:1.13em;font-weight:700;white-space:nowrap;cursor:pointer;text-decoration:none;will-change:transform;transition:transform 160ms var(--dpc-ease-out)}',");
             sb.AppendLine("    '.dpc-b svg,.dpc-b img{width:1.35em;height:1.35em;flex-shrink:0}',");
-            sb.AppendLine("    '#dpc-btn{background:linear-gradient(180deg,#ffffff,#f0edfb);color:#131316;box-shadow:0 1px 2px rgba(0,0,0,.18),0 4px 8px rgba(0,0,0,.14),0 14px 28px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9)}',");
+            sb.AppendLine("    '#dpc-btn{background:linear-gradient(180deg,#ffffff,#ececef);color:#131316;box-shadow:0 1px 2px rgba(0,0,0,.18),0 4px 8px rgba(0,0,0,.14),0 14px 28px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9)}',");
             sb.AppendLine("    '#dpc-tgbtn{background:rgba(255,255,255,.1);color:var(--dpc-ink);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}',");
             sb.AppendLine("    '#dpc-btn:disabled{opacity:.45;cursor:default}',");
             sb.AppendLine("    '@media(hover:hover) and (pointer:fine){.dpc-b:not(:disabled):hover{transform:translateY(-2px)}#dpc-btn:not(:disabled):hover{box-shadow:0 2px 4px rgba(0,0,0,.2),0 8px 16px rgba(0,0,0,.18),0 24px 48px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,1)}}',");
@@ -124,10 +133,6 @@ namespace QRAuth
             // Mobile-only "log in via Telegram" button — hidden unless the QR block is (see
             // the no-QR @media rule below).
             sb.AppendLine("    '#dpc-tgbtn{display:none}',");
-            sb.AppendLine("    '#dpc-tgstat{display:none;align-items:center;gap:.6em;min-height:1.4em;font-size:.85em;color:var(--dpc-body)}',");
-            sb.AppendLine("    '#dpc-tgstat i{width:.55em;height:.55em;border-radius:50%;background:var(--dpc-muted);flex-shrink:0}',");
-            sb.AppendLine("    '#dpc-tgstat.wait i{background:var(--dpc-acc);animation:dpcBreath 1.8s ease-in-out infinite}',");
-            sb.AppendLine("    '#dpc-tgstat.ok{color:var(--dpc-ok)}#dpc-tgstat.ok i{background:var(--dpc-ok)}',");
             // 0.9em, not smaller: this line carries "wrong password"/"connection error" and has
             // to be readable from a couch on TV.
             sb.AppendLine("    '#dpc-err{font-size:0.9em;min-height:1.5em;line-height:1.5;padding-left:.2em;color:var(--dpc-err);transition:color 160ms ease}',");
@@ -144,8 +149,7 @@ namespace QRAuth
             sb.AppendLine("    '#dpc-steps .dpc-step-t{font-size:0.99em;color:var(--dpc-body);line-height:1.6;max-width:42ch}',");
 
             // Right column (QR)
-            sb.AppendLine("    '#dpc-r{width:29em;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1em;padding:3em 2em;text-align:center}',");
-            sb.AppendLine("    '#dpc-qrcap{font-size:0.86em;font-weight:700;color:var(--dpc-body);letter-spacing:.2px;opacity:0;animation:dpcStagger .4s var(--dpc-ease-out) .2s forwards}',");
+            sb.AppendLine("    '#dpc-r{width:30em;box-sizing:border-box;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1em;padding:3em 4.5em 3em 3em;text-align:center}',");
             // No backdrop-filter here — it's the single most common cause of jank on
             // weak TV WebKit (Tizen/webOS): every frame, the browser has to re-sample
             // and blur whatever sits behind this element (the animated/blurred #dpc-bg
@@ -153,17 +157,14 @@ namespace QRAuth
             // software compositing where GPU support is spotty. Plain translucent
             // rgba() gives the same "not flashy white" result at essentially zero cost
             // — no blur-of-what's-behind, just a flat semi-transparent fill.
-            // Translucent white plate over the purple wash — the gradient shows through
-            // softly instead of a flat opaque square.
-            sb.AppendLine("    '#dpc-qr-wrap{position:relative;overflow:hidden;width:22.5em;height:22.5em;flex-shrink:0;background:var(--dpc-paper);border:1px solid rgba(255,255,255,.35);border-radius:1.9em;padding:0.9em;box-sizing:border-box;display:flex;align-items:center;justify-content:center;box-shadow:0 18px 44px rgba(0,0,0,.3);opacity:0;animation:dpcStagger .5s var(--dpc-ease-out) .26s forwards}',");
+            // "Double bezel": a dark tray (#dpc-qr-wrap) with a hairline, holding an opaque
+            // white plate (#dpc-qr-plate) with a concentric smaller radius (tray radius
+            // minus tray padding). The code stays max-contrast black-on-white, but reads
+            // as a machined part of the UI rather than a sticker slapped on the posters.
+            sb.AppendLine("    '#dpc-qr-wrap{width:22em;height:22em;flex-shrink:0;padding:.55em;box-sizing:border-box;border-radius:1.9em;background:rgba(10,10,11,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 1.5em 3.5em rgba(0,0,0,.45);opacity:0;animation:dpcStagger .5s var(--dpc-ease-out) .26s forwards}',");
+            sb.AppendLine("    '#dpc-qr-plate{position:relative;overflow:hidden;width:100%;height:100%;padding:.8em;box-sizing:border-box;border-radius:1.35em;background:var(--dpc-paper);box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}',");
             // Skeleton sweep while the QR library loads — replaces the old empty white box.
-            sb.AppendLine("    '#dpc-qr-wrap.loading::after{content:\\'\\';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(var(--dpc-acc-rgb),.18) 50%,transparent 70%);animation:dpcSweep 1.3s ease-in-out infinite}',");
-            // Live session status under the QR: breathing dot + short text.
-            sb.AppendLine("    '#dpc-qrstat{display:flex;align-items:center;justify-content:center;gap:.6em;min-height:1.4em;font-size:.82em;color:var(--dpc-body);opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .3s forwards}',");
-            sb.AppendLine("    '#dpc-qrstat i{width:.55em;height:.55em;border-radius:50%;background:var(--dpc-muted);flex-shrink:0}',");
-            sb.AppendLine("    '#dpc-qrstat.wait i{background:var(--dpc-acc);animation:dpcBreath 1.8s ease-in-out infinite}',");
-            sb.AppendLine("    '#dpc-qrstat.ok{color:var(--dpc-ok)}#dpc-qrstat.ok i{background:var(--dpc-ok)}',");
-            sb.AppendLine("    '#dpc-qrstat:empty{visibility:hidden}',");
+            sb.AppendLine("    '#dpc-qr-plate.loading::after{content:\\'\\';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(0,0,0,.07) 50%,transparent 70%);animation:dpcSweep 1.3s ease-in-out infinite}',");
             sb.AppendLine("    '#dpc-qr-box{position:relative;width:100%;height:100%}',");
             // qr-code-styling рисует SVG с фиксированным пиксельным width/height, снятым один раз
             // при построении (container.clientWidth), и НЕ проставляет viewBox вообще (проверено
@@ -185,7 +186,7 @@ namespace QRAuth
             // Row: round Telegram button on the left, caption text next to it (left-
             // aligned, reading naturally right after the button — button then label,
             // not text pushed away from it).
-            sb.AppendLine("    '#dpc-qr-cta{display:flex;align-items:center;justify-content:center;gap:0.85em;width:100%;max-width:22.5em}',");
+            sb.AppendLine("    '#dpc-qr-cta{display:flex;align-items:center;justify-content:center;gap:0.85em;width:100%;max-width:22em}',");
             // max-width forces this onto 2 lines instead of 1 long + 1 short; text-wrap:
             // balance (supported in current Chromium/Firefox, harmless no-op elsewhere)
             // splits those 2 lines evenly instead of the default greedy "cram the first
@@ -201,7 +202,7 @@ namespace QRAuth
             // per breakpoint. This is the ordinary "content needs a different layout below N px"
             // case (web.dev's own recommended reason to add a breakpoint at all), not a device
             // detection — see docs/auth-ux-guidelines.md §9.
-            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start}#dpc-content{flex-direction:column}#dpc-l{flex:0 0 auto;overflow:visible}#dpc-r{flex:0 0 auto;width:100%}.dpc-b{width:100%;align-self:stretch}}',");
+            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start}#dpc-content{flex-direction:column}#dpc-l{flex:0 0 auto;overflow:visible;padding-left:2.93em}#dpc-r{flex:0 0 auto;width:100%}.dpc-b{width:100%;align-self:stretch}}',");
             // No-QR mode: a QR on the very phone that would have to scan it is useless, so on
             // phones the whole QR column is swapped for a plain "log in via Telegram" button
             // in the action list — same session deep link, same polling, the user just taps
@@ -210,10 +211,10 @@ namespace QRAuth
             // a phone). This is a content choice, not sizing — sizing stays em-based.
             // TVs/desktops never match: their CSS viewport is ≥540px tall.
             if (hasTg && conf.show_qr)
-                sb.AppendLine("    '@media(max-width:700px),(max-height:480px) and (pointer:coarse){#dpc-r{display:none}#dpc-tgbtn{display:inline-flex}#dpc-tgstat{display:flex}#dpc-tgstat:empty{display:none}}',");
+                sb.AppendLine("    '@media(max-width:700px),(max-height:480px) and (pointer:coarse){#dpc-r{display:none}#dpc-tgbtn{display:inline-flex}}',");
 
             // Reduced motion
-            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-actions,#dpc-steps,#dpc-qrcap,#dpc-qr-wrap,#dpc-qrpill,#dpc-qrstat,#dpc-blocked,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qrstat i,#dpc-tgstat i,#dpc-qr-wrap.loading::after{animation:none!important}}',");
+            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-actions,#dpc-steps,#dpc-qr-wrap,#dpc-qrpill,#dpc-blocked,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qr-wrap.loading::after{animation:none!important}}',");
 
             // TV focus ring — a crisp, solid (unblurred) offset ring per §10.3: a gap in
             // the page base color, then an accent ring, plus the same lift as :hover. On TV
@@ -361,7 +362,6 @@ namespace QRAuth
             if (hasTg && conf.show_qr)
             {
                 sb.AppendLine("    + '<a id=\"dpc-tgbtn\" class=\"dpc-b selector\" target=\"_blank\" rel=\"noopener\"><img src=\"' + tgIconSrc + '\" alt=\"\" /><span id=\"dpc-tgbtn-text\"></span></a>'");
-                sb.AppendLine("    + '<div id=\"dpc-tgstat\" role=\"status\" aria-live=\"polite\"></div>'");
             }
             sb.AppendLine("    + '<div id=\"dpc-newpass\"><span id=\"dpc-newpass-l\">Ваш пароль — запишите, он больше не будет показан</span><span id=\"dpc-newpass-v\"></span></div>'");
             sb.AppendLine("    + '<div id=\"dpc-err\"></div>'");
@@ -380,13 +380,11 @@ namespace QRAuth
                 sb.AppendLine("  var tgUrl  = " + jsTgUrl + ";");
                 sb.AppendLine("  var rightHtml = ''");
                 sb.AppendLine("    + '<div id=\"dpc-r\">'");
-                sb.AppendLine("    + '<div id=\"dpc-qrcap\"></div>'");
-                sb.AppendLine("    + '<div id=\"dpc-qr-wrap\"><div id=\"dpc-qr-box\"></div></div>'");
+                sb.AppendLine("    + '<div id=\"dpc-qr-wrap\"><div id=\"dpc-qr-plate\"><div id=\"dpc-qr-box\"></div></div></div>'");
                 sb.AppendLine("    + '<div id=\"dpc-qr-cta\">'");
                 sb.AppendLine("    + '<a id=\"dpc-qrpill\" class=\"selector\" target=\"_blank\" rel=\"noopener\"><img src=\"' + tgIconSrc + '\" alt=\"Telegram\" /></a>'");
                 sb.AppendLine("    + '<div id=\"dpc-qrsub\"></div>'");
                 sb.AppendLine("    + '</div>'");
-                sb.AppendLine("    + '<div id=\"dpc-qrstat\" role=\"status\" aria-live=\"polite\"></div>'");
                 sb.AppendLine("    + '</div>';");
             }
             else
@@ -395,9 +393,38 @@ namespace QRAuth
             }
 
             sb.AppendLine();
-            sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\"><div id=\"dpc-bg\"></div><div id=\"dpc-content\">' + leftHtml + rightHtml + '</div></div></div>';");
+            string posterLayers = conf.poster_wall ? "<div id=\\\"dpc-posters\\\"></div><div id=\\\"dpc-shade\\\"></div>" : "";
+            sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\">" + posterLayers + "<div id=\"dpc-bg\"></div><div id=\"dpc-content\">' + leftHtml + rightHtml + '</div></div></div>';");
             sb.AppendLine("  document.body.insertAdjacentHTML('beforeend', html);");
             sb.AppendLine();
+
+            if (conf.poster_wall)
+            {
+                // count=0 (module off, TMDB unreachable, first fetch not done yet) → nothing
+                // happens and the plain gradient stays. Order is shuffled per page load; 72
+                // tiles (12 per row) cycle through the ≤30 cached files to fill the tilted wall.
+                sb.AppendLine("  (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/posters', function(res) {");
+                sb.AppendLine("    var box = document.getElementById('dpc-posters');");
+                sb.AppendLine("    if (!box || !res || !res.count) return;");
+                sb.AppendLine("    var order = [], i, j, t;");
+                sb.AppendLine("    for (i = 0; i < res.count; i++) order.push(i);");
+                sb.AppendLine("    for (i = order.length - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = order[i]; order[i] = order[j]; order[j] = t; }");
+                sb.AppendLine("    var need = Math.min(res.count, 12), loaded = 0;");
+                sb.AppendLine("    function one() {");
+                sb.AppendLine("      if (++loaded !== need) return;");
+                sb.AppendLine("      var w = document.getElementById('dpc-w');");
+                sb.AppendLine("      if (w) w.className += ' dpc-has-posters';");
+                sb.AppendLine("    }");
+                sb.AppendLine("    for (i = 0; i < 72; i++) {");
+                sb.AppendLine("      var img = new Image();");
+                sb.AppendLine("      img.alt = '';");
+                sb.AppendLine("      img.onload = one;");
+                sb.AppendLine("      img.src = '{localhost}/tgbot/qr/poster/' + order[i % order.length] + '?v=' + res.v;");
+                sb.AppendLine("      box.appendChild(img);");
+                sb.AppendLine("    }");
+                sb.AppendLine("  }, function() {});");
+                sb.AppendLine();
+            }
 
             // Текст из init.conf проставляется через textContent/href, а не в разметку —
             // так браузер сам экранирует HTML-спецсимволы вместо ручного экранирования.
@@ -409,7 +436,6 @@ namespace QRAuth
             sb.AppendLine();
             if (hasTg && conf.show_qr)
             {
-                sb.AppendLine("  document.getElementById('dpc-qrcap').textContent = " + jsQrCap + ";");
                 sb.AppendLine("  document.getElementById('dpc-qrsub').textContent = " + jsQrSub + ";");
                 sb.AppendLine("  document.getElementById('dpc-qrpill').setAttribute('aria-label', " + jsTgBtn + ");");
                 sb.AppendLine("  document.getElementById('dpc-qrpill').href = tgUrl;");
@@ -429,21 +455,6 @@ namespace QRAuth
                 // logs in with it through the exact same doLogin() path as a typed
                 // password — the bot token IS the password (see usersrepository.cs).
                 sb.AppendLine("  var qrSessionId = null;");
-                // Status line under the QR: '' = neutral dot, 'wait' = breathing dot,
-                // 'ok' = green. Empty text hides the row (see #dpc-qrstat:empty).
-                // Written to both the QR-column line and its mobile twin under #dpc-tgbtn —
-                // CSS shows whichever one the current layout uses.
-                sb.AppendLine("  function qrStatus(cls, text) {");
-                sb.AppendLine("    ['dpc-qrstat', 'dpc-tgstat'].forEach(function(id) {");
-                sb.AppendLine("      var el = document.getElementById(id);");
-                sb.AppendLine("      if (!el) return;");
-                sb.AppendLine("      el.className = cls || '';");
-                sb.AppendLine("      el.innerHTML = '';");
-                sb.AppendLine("      if (!text) return;");
-                sb.AppendLine("      el.appendChild(document.createElement('i'));");
-                sb.AppendLine("      el.appendChild(document.createTextNode(text));");
-                sb.AppendLine("    });");
-                sb.AppendLine("  }");
                 sb.AppendLine("  var qrPollTimer = null;");
                 sb.AppendLine("  var qrStartPending = false;");
                 sb.AppendLine();
@@ -459,11 +470,9 @@ namespace QRAuth
                 sb.AppendLine("      qrNet.silent('{localhost}/tgbot/qr/status?session=' + encodeURIComponent(qrSessionId), function(res) {");
                 sb.AppendLine("        if (res && res.status === 'confirmed' && res.token) {");
                 sb.AppendLine("          stopQrPoll();");
-                sb.AppendLine("          qrStatus('ok', 'Вход подтверждён');");
                 sb.AppendLine("          if (_btn && !_btn.disabled) doLogin(res.token, true);");
                 sb.AppendLine("        } else if (res && res.status === 'expired') {");
                 sb.AppendLine("          stopQrPoll();");
-                sb.AppendLine("          qrStatus('', 'Код устарел — обновляем');");
                 sb.AppendLine("          startQrAuth();");
                 sb.AppendLine("        }");
                 sb.AppendLine("      }, function() {});");
@@ -476,20 +485,18 @@ namespace QRAuth
                 sb.AppendLine("    var qrNet = new Lampa.Reguest();");
                 sb.AppendLine("    qrNet.silent('{localhost}/tgbot/qr/start', function(res) {");
                 sb.AppendLine("      qrStartPending = false;");
-                sb.AppendLine("      if (!res || !res.session) { qrStatus('', ''); return; }");
+                sb.AppendLine("      if (!res || !res.session) return;");
                 sb.AppendLine("      qrSessionId = res.session;");
                 sb.AppendLine("      var dynUrl = tgUrl.split('?')[0] + '?start=qr_' + qrSessionId;");
                 sb.AppendLine("      if (_qrpill) _qrpill.href = dynUrl;");
                 sb.AppendLine("      if (_tgbtn) _tgbtn.href = dynUrl;");
                 sb.AppendLine("      renderQr(document.getElementById('dpc-qr-box'), dynUrl);");
-                sb.AppendLine("      qrStatus('wait', 'Ждём подтверждения в Telegram');");
                 sb.AppendLine("      pollQrSession();");
                 // Bot module off/unreachable: the static tgUrl QR still opens the bot, so no
-                // error — just drop the "waiting" status that would never resolve.
-                sb.AppendLine("    }, function() { qrStartPending = false; qrStatus('', ''); });");
+                // error to show.
+                sb.AppendLine("    }, function() { qrStartPending = false; });");
                 sb.AppendLine("  }");
                 sb.AppendLine();
-                sb.AppendLine("  qrStatus('', 'Готовим код');");
                 sb.AppendLine("  startQrAuth();");
                 sb.AppendLine();
             }
@@ -742,20 +749,20 @@ namespace QRAuth
             return ApplyPalette(sb.ToString());
         }
 
-        // Purple wash: near-black violet base, #c13bea accent (the middle stop of the
-        // #dpc-bg blobs), cool lavender grays for text.
+        // Neutral "cinema": near-black base, white as the only accent (focus ring), neutral
+        // grays for text — the poster wall supplies all the colour.
         // Longer names first so "--dpc-acc-rgb" is not eaten by "--dpc-acc".
         private static readonly (string Name, string Value)[] Palette =
         {
-            ("--dpc-acc-rgb", "193,59,234"),
-            ("--dpc-acc",     "#c13bea"),
-            ("--dpc-base",    "#0d0710"),
-            ("--dpc-ink",     "#fbfaff"),
-            ("--dpc-body",    "#c9c4dd"),
-            ("--dpc-muted",   "#8a83a8"),
-            ("--dpc-err",     "#ff7a8a"),
-            ("--dpc-ok",      "#86c995"),
-            ("--dpc-paper",   "rgba(255,255,255,.62)"),
+            ("--dpc-acc-rgb", "255,255,255"),
+            ("--dpc-acc",     "#ffffff"),
+            ("--dpc-base",    "#0a0a0b"),
+            ("--dpc-ink",     "#fafafa"),
+            ("--dpc-body",    "#c7c7cc"),
+            ("--dpc-muted",   "#8e8e93"),
+            ("--dpc-err",     "#ff7a6b"),
+            ("--dpc-ok",      "#7ed69a"),
+            ("--dpc-paper",   "#ffffff"),
         };
 
         private static string ApplyPalette(string js)
