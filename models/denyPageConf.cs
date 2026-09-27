@@ -11,6 +11,6 @@ namespace QRAuth.Models
         public string step2_text      { get; set; } = "";
         public string qr_caption      { get; set; } = "";
         public string qr_subcaption   { get; set; } = "";
-        public string tg_button_text  { get; set; } = "Открыть Telegram";
+        public string tg_button_text  { get; set; } = "";
     }
 }

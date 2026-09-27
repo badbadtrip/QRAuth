@@ -210,7 +210,7 @@ deny.js:  поллинг GET /tgbot/qr/status?session=... → { status: confirme
 | `page_title`, `page_subtitle` | `string` | Заголовок и подзаголовок |
 | `step1_text`, `step2_text` | `string` | Строки инструкции под кнопкой входа |
 | `qr_caption`, `qr_subcaption` | `string` | Заголовок и подпись QR-блока |
-| `tg_button_text` | `string` | `aria-label` иконки-кнопки Telegram |
+| `tg_button_text` | `string` | Текст мобильной кнопки «Войти через Telegram» (на телефоне заменяет QR) и `aria-label` иконки Telegram на ТВ/ПК |
 
 </details>
 
