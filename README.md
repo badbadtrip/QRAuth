@@ -208,7 +208,7 @@ deny.js:  поллинг GET /tgbot/qr/status?session=... → { status: confirme
 | `tg_target` | `string` | `@username`, `https://t.me/…` или `tg://` - управляет QR-блоком, должен совпадать с ботом из `TelegramBot` |
 | `show_qr` | `bool` | QR виден только если `tg_target` задан **и** `show_qr = true` |
 | `page_title`, `page_subtitle` | `string` | Заголовок и подзаголовок |
-| `step1_text`, `step2_text` | `string` | Строки инструкции под кнопкой входа |
+| `step1_text`, `step2_text` | `string` | Строки подсказки под кнопками. Пустая строка не выводится; по умолчанию только `step2` (если задан `tg_target`) |
 | `qr_subcaption` | `string` | Подпись под QR рядом с иконкой Telegram |
 | `tg_button_text` | `string` | Текст мобильной кнопки «Войти через Telegram» (на телефоне заменяет QR) и `aria-label` иконки Telegram на ТВ/ПК |
 | `poster_wall` | `bool` | Фон из постеров фильмов в стиле Netflix (по умолчанию `true`). Постеры модуль сам берёт раз в сутки через встроенный в Lampac `/tmdb`-прокси, а если сервер не достаёт до TMDB (РФ/РБ без прокси) - через те же зеркала, что и Lampa с «Проксировать TMDB» (`apitmdb.cub.red`, `imagetmdb.com` и др.), кэширует в `cache/qrauth/posters/` и отдаёт по `/tgbot/qr/poster/{n}` - наружу открыта только эта папка, а не весь TMDB. Если постеров нет, остаётся обычный фиолетовый фон |

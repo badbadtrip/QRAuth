@@ -9,9 +9,6 @@ namespace QRAuth
         // telegram-icon-transparent.png, downscaled to 128x128 and base64-encoded —
         // see the comment where it's used in Build() for why it's inlined instead of
         // shipped as a separate file.
-        private const string TgIconBase64 =
-            "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";
-
         public static string Build(DenyPageConf conf)
         {
             string tgUrl = NormalizeTgUrl(conf.tg_target);
@@ -20,9 +17,17 @@ namespace QRAuth
 
             string jsTgUrl  = Js(tgUrl);
             string jsTitle  = Js(string.IsNullOrWhiteSpace(conf.page_title)     ? "Вход в Lampa" : conf.page_title);
-            string jsSub    = Js(string.IsNullOrWhiteSpace(conf.page_subtitle)  ? "Доступ ограничен. Пароль можно получить у администратора." : conf.page_subtitle);
-            string jsStep1  = Js(string.IsNullOrWhiteSpace(conf.step1_text)     ? "Нажмите «Войти по паролю»" : conf.step1_text);
-            string jsStep2  = Js(string.IsNullOrWhiteSpace(conf.step2_text)     ? "Введите пароль, который выдал администратор, и подтвердите" : conf.step2_text);
+            // Short defaults: the buttons already say "log in by password / via Telegram",
+            // so the copy must not re-narrate them. The subtitle never mentions the QR — on
+            // phones there is none (see the no-QR @media rule).
+            string jsSub    = Js(string.IsNullOrWhiteSpace(conf.page_subtitle)
+                ? (hasTg ? "Войдите через Telegram или по паролю." : "Доступ ограничен. Пароль можно получить у администратора.")
+                : conf.page_subtitle);
+            // Steps: an empty line is simply not rendered (no default for step1 — "press the
+            // password button" only repeated the button); both empty → no #dpc-steps block.
+            string step1    = (conf.step1_text ?? "").Trim();
+            string step2    = !string.IsNullOrWhiteSpace(conf.step2_text) ? conf.step2_text.Trim()
+                            : hasTg ? "Нет пароля? Бот в Telegram поможет получить доступ." : "";
             // The QR is a login method now (startQrAuth → bot confirm → doLogin), not a
             // "get a password from the bot" link, so the default copy says what it does.
             string jsQrSub  = Js(string.IsNullOrWhiteSpace(conf.qr_subcaption)  ? "Наведите камеру телефона и подтвердите вход в Telegram" : conf.qr_subcaption);
@@ -44,7 +49,11 @@ namespace QRAuth
             // properties, but Build() substitutes them with literals (see Palette) — old TV
             // engines (Tizen 3 = Chromium 47) have no custom-property support.
             sb.AppendLine("    ':root{--dpc-ease-out:cubic-bezier(0.23,1,0.32,1)}',");
-            sb.AppendLine("    '#dpc{color-scheme:dark;position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:\"Manrope\",\"Segoe UI\",system-ui,sans-serif;color:var(--dpc-ink);padding:0;box-sizing:border-box;overflow:auto;background:#050308}',");
+            // "SegoeUI" (no space) is the @font-face Lampa's own app.css bundles and has
+            // already loaded by the time deny.js runs — same face on every TV/phone, no
+            // extra request. It only ships 300/400/600/700, so never use weight 800+.
+            // "Segoe UI" (system, Windows) and system-ui are just fallbacks.
+            sb.AppendLine("    '#dpc{color-scheme:dark;position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:\"SegoeUI\",\"Segoe UI\",system-ui,sans-serif;color:var(--dpc-ink);padding:0;box-sizing:border-box;overflow:auto;background:#050308}',");
             sb.AppendLine("    '@keyframes dpcIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}',");
             sb.AppendLine("    '@keyframes dpcStagger{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',");
             // QR skeleton sweep — opacity or transform only, so they
@@ -66,14 +75,17 @@ namespace QRAuth
             // top/left/width/height instead of `inset` for old TV engines. The wall is
             // texture, not content: one static brightness/saturation filter on the whole
             // layer knocks it back evenly (rasterized once, never re-run). Hidden until
-            // enough posters decoded (.dpc-has-posters). #dpc-shade: solid-ish dark zone
-            // under the left column (text never sits on a busy poster), fading to a
-            // uniform dim toward the right, plus top/bottom fade and an edge vignette.
+            // enough posters decoded (.dpc-has-posters). #dpc-shade: dark zone under the left
+            // column (text never sits on a busy poster), fading to a uniform .5 dim toward the
+            // right, plus top/bottom fade and an edge vignette. The left zone is .86/.8, not
+            // the original .94/.9 — that solid a zone starved the glass buttons of anything
+            // to blur. Text there also keeps a soft text-shadow (.dpc-has-posters rule below).
             if (conf.poster_wall)
             {
                 sb.AppendLine("    '#dpc-posters{position:absolute;top:-25%;left:-15%;width:130%;height:150%;z-index:0;pointer-events:none;display:flex;flex-wrap:wrap;align-content:flex-start;opacity:0;-webkit-filter:brightness(.55) saturate(.75);filter:brightness(.55) saturate(.75);transform:perspective(1400px) rotateX(14deg) rotateZ(-7deg);transition:opacity 1.2s var(--dpc-ease-out)}',");
                 sb.AppendLine("    '#dpc-posters img{display:block;width:7.73%;height:auto;margin:.3%;border-radius:.45em}',");
-                sb.AppendLine("    '#dpc-shade{display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;background:radial-gradient(130% 100% at 62% 50%,rgba(10,10,11,0) 55%,rgba(10,10,11,.75) 100%),linear-gradient(0deg,rgba(10,10,11,.92) 0%,rgba(10,10,11,0) 30%,rgba(10,10,11,0) 75%,rgba(10,10,11,.6) 100%),linear-gradient(90deg,rgba(10,10,11,.94) 0%,rgba(10,10,11,.9) 32%,rgba(10,10,11,.58) 56%,rgba(10,10,11,.5) 100%)}',");
+                sb.AppendLine("    '#dpc-shade{display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;background:radial-gradient(130% 100% at 62% 50%,rgba(10,10,11,0) 55%,rgba(10,10,11,.75) 100%),linear-gradient(0deg,rgba(10,10,11,.92) 0%,rgba(10,10,11,0) 30%,rgba(10,10,11,0) 75%,rgba(10,10,11,.6) 100%),linear-gradient(90deg,rgba(10,10,11,.86) 0%,rgba(10,10,11,.8) 32%,rgba(10,10,11,.55) 56%,rgba(10,10,11,.5) 100%)}',");
+                sb.AppendLine("    '.dpc-has-posters #dpc-title,.dpc-has-posters #dpc-subtitle,.dpc-has-posters #dpc-steps,.dpc-has-posters #dpc-logo,.dpc-has-posters #dpc-err{text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 1.2em rgba(0,0,0,.55)}',");
                 sb.AppendLine("    '.dpc-has-posters #dpc-posters{opacity:1}.dpc-has-posters #dpc-shade{display:block}.dpc-has-posters #dpc-bg{display:none}',");
                 // Narrow screens: 4 posters per row, otherwise they shrink to thumbnails; flat
                 // heavier shade since the stacked layout has text across the full width.
@@ -102,37 +114,73 @@ namespace QRAuth
             sb.AppendLine("    '#dpc-logo-mark svg{display:block;width:100%;height:100%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))}',");
             sb.AppendLine("    '#dpc-logo-text{font-weight:700;font-size:0.99em;letter-spacing:1.5px;color:var(--dpc-ink);text-transform:uppercase}',");
             sb.AppendLine("    '#dpc-logo-next{font-weight:400;color:var(--dpc-muted);letter-spacing:1.5px}',");
-            sb.AppendLine("    '#dpc-title{font-size:2.25em;font-weight:800;color:var(--dpc-ink);line-height:1.25;margin:0;letter-spacing:-.4px;opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .1s forwards}',");
+            sb.AppendLine("    '#dpc-title{font-size:2.25em;font-weight:700;color:var(--dpc-ink);line-height:1.25;margin:0;letter-spacing:-.4px;opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .1s forwards}',");
             sb.AppendLine("    '#dpc-subtitle{font-size:0.99em;color:var(--dpc-body);line-height:1.6;margin:0;max-width:40ch;opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .16s forwards}',");
-            sb.AppendLine("    '#dpc-actions{display:flex;flex-direction:column;gap:0.83em;margin-top:0.38em;opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .22s forwards}',");
+            // No entry animation on #dpc-actions itself: while an opacity/transform
+            // animation runs on it, it is a backdrop root in Chrome — the glass buttons'
+            // backdrop-filter then only sees this (empty) container and renders as a flat
+            // dark pill, and the real glass "pops in" when the animation ends (~0.7s after
+            // paint). The stagger lives on the .dpc-b buttons instead (see .dpc-b rule): an
+            // element's OWN opacity/transform doesn't cut off its own backdrop, only an
+            // ancestor's does. `backwards` so nothing lingers after the animation.
+            sb.AppendLine("    '#dpc-actions{display:flex;flex-direction:column;gap:0.83em;margin-top:0.38em}',");
+            // #dpc-btns shrinks to the widest button and stretches the others to it, so the
+            // password and Telegram buttons are equal width (label left, arrow right). Its
+            // own wrapper — not #dpc-actions — so a long #dpc-err line can't widen them.
+            // No opacity/transform/filter here (backdrop root trap, see above).
+            sb.AppendLine("    '#dpc-btns{display:flex;flex-direction:column;gap:0.83em;align-self:flex-start}#dpc-btns .dpc-b{align-self:stretch;justify-content:flex-start}#dpc-btns .dpc-b-arr{margin-left:auto}',");
 
-            // Primary pill button (white, barely-there gradient — docs/auth-ux-guidelines.md
-            // §10.4: flat/near-flat is the premium baseline). Rest-state shadow is layered
-            // (tight/medium/wide, each with its own offset+blur+opacity) instead of one
-            // blurred shadow — §10.4's "designer shadow" technique. Hover/active are plain
-            // `transition`s (lift + deeper layered shadow / `scale(.97)`), not a
-            // `@keyframes` loop — §10.1/§10.2: a hover effect should play once per state
-            // change, not run as an infinite decorative animation. (Two decorative
-            // rewrites — a pulse ring, then a moving-gradient/blob redesign — were tried
-            // and reverted here; this plain version is the one that stuck.)
-            // Only `transform` is in the transition list, not `box-shadow` — box-shadow
-            // isn't compositor-only like transform/opacity, animating it forces a repaint
-            // every frame of the transition. This button is focused by default on TV load
-            // (§10.3), so the rest→focus shadow change fires immediately during the page's
-            // busiest render window; letting the shadow snap instantly instead of
-            // transitioning removes that repaint cost, the lift still animates smoothly.
-            // .dpc-b is the shared pill shape (password button + mobile Telegram button);
-            // #dpc-btn is the white primary, #dpc-tgbtn the translucent secondary below it.
-            sb.AppendLine("    '.dpc-b{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:0.75em;width:auto;align-self:flex-start;padding:1.2em 2.25em;box-sizing:border-box;border:none;border-radius:999px;font-family:inherit;font-size:1.13em;font-weight:700;white-space:nowrap;cursor:pointer;text-decoration:none;will-change:transform;transition:transform 160ms var(--dpc-ease-out)}',");
-            sb.AppendLine("    '.dpc-b svg,.dpc-b img{width:1.35em;height:1.35em;flex-shrink:0}',");
-            sb.AppendLine("    '#dpc-btn{background:linear-gradient(180deg,#ffffff,#ececef);color:#131316;box-shadow:0 1px 2px rgba(0,0,0,.18),0 4px 8px rgba(0,0,0,.14),0 14px 28px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9)}',");
-            sb.AppendLine("    '#dpc-tgbtn{background:rgba(255,255,255,.1);color:var(--dpc-ink);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}',");
+            // Dark frosted glass (both the password button and the mobile Telegram button):
+            // a dark translucent fill rgba(22,22,25,.38) over a strong backdrop-filter
+            // blur(27px) of the posters behind (saturate/brightness lift them a bit, since
+            // the left column sits under the dark #dpc-shade), a faint .1 white hairline border and a dim top
+            // specular ::before line (no extra inset rims — they doubled the edge) — the "dark glass panel"
+            // look, not a milky white card (a light .23 fill read as a grey slab on the
+            // dark page). Proportions follow Lampa's .simple-button (2.8em tall). Trailing
+            // arrow sits in its own small circle ("button-in-button"). The source design's
+            // left-edge 1px ::after line is dropped: a pill's border-radius clips it into a
+            // short mid-height tick that reads exactly like a render artifact.
+            //
+            // Focus styles are scoped to body:not(.mouse--controll). Lampa itself sets
+            // body.mouse--controll (src/core/platform.js) when navigation is mouse/touch —
+            // the default in a desktop browser and on phones — and leaves it off for remote
+            // navigation (TV). Lampa.Controller puts .focus on the password button right on
+            // load in every mode; without this scope the browser showed it pre-highlighted.
+            // Mouse users get the same look via :hover instead. (This is input mode, not a
+            // sizing branch — sizing stays purely em-based, see CLAUDE.md.)
+            // Focus = "lit glass": lighter smoky fill + brighter border, soft outer white
+            // glow, stronger top rim; arrow circle turns solid white; lock opens. Text stays white.
+            //
+            // NEVER transform-scale these buttons (focus, hover or :active): Chrome leaves
+            // thin stale slivers at the pill's former left/right edges after a scaled
+            // element shrinks back, and backdrop-filter makes it worse. Press feedback is a
+            // brighter fill instead of scale(.97).
+            sb.AppendLine("    '.dpc-b{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:.7em;width:auto;align-self:flex-start;height:2.9em;padding:0 .45em 0 1.3em;box-sizing:border-box;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.1);border-radius:999px;background:rgba(22,22,25,.38);-webkit-backdrop-filter:blur(27px) saturate(1.6) brightness(1.3);backdrop-filter:blur(27px) saturate(1.6) brightness(1.3);color:var(--dpc-ink);box-shadow:0 .35em 1.4em rgba(0,0,0,.25);font-family:inherit;font-size:1.05em;font-weight:600;white-space:nowrap;cursor:pointer;text-decoration:none;transition:background-color 160ms ease,border-color 160ms ease,color 160ms ease;animation:dpcStagger .45s var(--dpc-ease-out) .22s backwards}',");
+            // Specular top edge (the glass ::before highlight). Inset from the ends so it
+            // stays on the straight part of the pill instead of cutting the rounded caps.
+            sb.AppendLine("    '.dpc-b::before{content:\\'\\';position:absolute;top:0;left:14%;right:14%;height:1px;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.3),rgba(255,255,255,0))}',");
+            sb.AppendLine("    '.dpc-b > svg{width:1.15em;height:1.15em;flex-shrink:0}.dpc-b > img{width:1.3em;height:1.3em;flex-shrink:0}',");
+            sb.AppendLine("    '.dpc-b-arr{display:inline-flex;align-items:center;justify-content:center;width:2em;height:2em;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.12);transition:background-color 160ms ease,color 160ms ease}',");
+            sb.AppendLine("    '.dpc-b-arr svg{width:.95em;height:.95em;transition:transform 160ms var(--dpc-ease-out)}',");
             sb.AppendLine("    '#dpc-btn:disabled{opacity:.45;cursor:default}',");
-            sb.AppendLine("    '@media(hover:hover) and (pointer:fine){.dpc-b:not(:disabled):hover{transform:translateY(-2px)}#dpc-btn:not(:disabled):hover{box-shadow:0 2px 4px rgba(0,0,0,.2),0 8px 16px rgba(0,0,0,.18),0 24px 48px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,1)}}',");
-            sb.AppendLine("    '.dpc-b:not(:disabled):active{transform:scale(.97) translateY(0)}',");
+            // Lock "opens" on hover/focus: the shackle pivots on its left leg (8,11 in the
+            // 24-unit viewBox) so the right leg swings up out of the body — the standard
+            // unlocked-padlock silhouette. transform only; SVG user units == CSS px here.
+            sb.AppendLine("    '.dpc-shackle{transform-origin:8px 11px;transition:transform 220ms var(--dpc-ease-out)}',");
+            sb.AppendLine("    'body:not(.mouse--controll) .dpc-b.focus .dpc-shackle{transform:translateY(-1px) rotate(-18deg)}',");
+            sb.AppendLine("    '@media(hover:hover) and (pointer:fine){.dpc-b:not(:disabled):hover .dpc-shackle{transform:translateY(-1px) rotate(-18deg)}}',");
+            // Telegram counterpart of the opening lock: the paper plane "takes off" up and to
+            // the right on hover/focus. Transform on the icon only — never the button itself.
+            sb.AppendLine("    '.dpc-plane{transition:transform 220ms var(--dpc-ease-out)}',");
+            sb.AppendLine("    'body:not(.mouse--controll) .dpc-b.focus .dpc-plane{transform:translate(2px,-2px)}',");
+            sb.AppendLine("    '@media(hover:hover) and (pointer:fine){.dpc-b:not(:disabled):hover .dpc-plane{transform:translate(2px,-2px)}}',");
+            sb.AppendLine("    'body:not(.mouse--controll) .dpc-b.focus{background:rgba(58,58,64,.55);border-color:rgba(255,255,255,.35);box-shadow:0 0 1.4em rgba(255,255,255,.14),0 .5em 1.6em rgba(0,0,0,.4);outline:none}body:not(.mouse--controll) .dpc-b.focus .dpc-b-arr{background:#fff;color:#0a0a0b}body:not(.mouse--controll) .dpc-b.focus .dpc-b-arr svg{transform:translateX(2px)}',");
+            sb.AppendLine("    '@media(hover:hover) and (pointer:fine){.dpc-b:not(:disabled):hover{background:rgba(58,58,64,.55);border-color:rgba(255,255,255,.35);box-shadow:0 0 1.4em rgba(255,255,255,.14),0 .5em 1.6em rgba(0,0,0,.4)}.dpc-b:not(:disabled):hover .dpc-b-arr{background:#fff;color:#0a0a0b}.dpc-b:not(:disabled):hover .dpc-b-arr svg{transform:translateX(2px)}}',");
+            sb.AppendLine("    '.dpc-b:focus{outline:none}',");
+            sb.AppendLine("    '.dpc-b:not(:disabled):active{background:rgba(78,78,86,.6)}',");
             // Mobile-only "log in via Telegram" button — hidden unless the QR block is (see
             // the no-QR @media rule below).
-            sb.AppendLine("    '#dpc-tgbtn{display:none}',");
+            sb.AppendLine("    '#dpc-tgbtn{display:none}.dpc-web #dpc-tgbtn{display:inline-flex}',");
             // 0.9em, not smaller: this line carries "wrong password"/"connection error" and has
             // to be readable from a couch on TV.
             sb.AppendLine("    '#dpc-err{font-size:0.9em;min-height:1.5em;line-height:1.5;padding-left:.2em;color:var(--dpc-err);transition:color 160ms ease}',");
@@ -183,26 +231,26 @@ namespace QRAuth
             // one consistent style across both columns instead of the right side being
             // bolder/brighter/differently-aligned. The shadow is only for legibility over
             // the bright gradient backdrop here, not a weight/emphasis choice.
-            // Row: round Telegram button on the left, caption text next to it (left-
-            // aligned, reading naturally right after the button — button then label,
-            // not text pushed away from it).
-            sb.AppendLine("    '#dpc-qr-cta{display:flex;align-items:center;justify-content:center;gap:0.85em;width:100%;max-width:22em}',");
-            // max-width forces this onto 2 lines instead of 1 long + 1 short; text-wrap:
-            // balance (supported in current Chromium/Firefox, harmless no-op elsewhere)
-            // splits those 2 lines evenly instead of the default greedy "cram the first
-            // line full, dump the leftover word on the second" wrap.
-            sb.AppendLine("    '#dpc-qrsub{flex:1;min-width:0;max-width:26ch;font-size:0.92em;font-weight:400;color:var(--dpc-body);line-height:1.5;text-align:left;text-wrap:balance;text-shadow:0 1px 3px rgba(0,0,0,.4)}',");
-            sb.AppendLine("    '#dpc-qrpill{display:inline-flex;align-items:center;justify-content:center;width:2.75em;height:2.75em;flex-shrink:0;border-radius:50%;cursor:pointer;text-decoration:none;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35));transition:transform 160ms var(--dpc-ease-out);opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .32s forwards}',");
-            sb.AppendLine("    '#dpc-qrpill img{width:100%;height:100%;display:block;border-radius:50%}',");
-            sb.AppendLine("    '@media(hover:hover) and (pointer:fine){#dpc-qrpill:not(:active):hover{transform:scale(1.08)}}',");
-            sb.AppendLine("    '#dpc-qrpill:active{transform:scale(.92)}',");
+            // Caption only, centered under the QR (the round Telegram link next to it was
+            // removed: on TV it was a useless focus stop, in a browser it duplicated
+            // #dpc-tgbtn). Same width as the QR tray (22em) so the default caption wraps into
+            // 2 lines; text-wrap:balance (no-op on old engines) evens them out.
+            sb.AppendLine("    '#dpc-qr-cta{width:100%;max-width:22em}',");
+            sb.AppendLine("    '#dpc-qrsub{font-size:0.92em;font-weight:400;color:var(--dpc-body);line-height:1.5;text-align:center;text-wrap:balance;text-shadow:0 1px 3px rgba(0,0,0,.4);opacity:0;animation:dpcStagger .45s var(--dpc-ease-out) .32s forwards}',");
 
             // Responsive — layout reflow only (two columns → stacked), never sizing: sizing is
             // already fluid via em/Lampa's body font-size above, so there's nothing left to guess
             // per breakpoint. This is the ordinary "content needs a different layout below N px"
             // case (web.dev's own recommended reason to add a breakpoint at all), not a device
             // detection — see docs/auth-ux-guidelines.md §9.
-            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start}#dpc-content{flex-direction:column}#dpc-l{flex:0 0 auto;overflow:visible;padding-left:2.93em}#dpc-r{flex:0 0 auto;width:100%}.dpc-b{width:100%;align-self:stretch}}',");
+            // The ONE sizing exception: Lampa's size() clamps body to its 10.6px floor on
+            // every viewport under ~892px, so on a phone the em chain bottoms out at 10.6px
+            // (Lampa's own UI compensates with its own mobile CSS; this page has no such
+            // layer and rendered tiny — 31px-tall buttons, 10px body text). Below 700px the
+            // clamp is always active, so 1.5em here is a fixed ~16px base, not a device guess.
+            // Content is vertically centered via min-height (not height) so a tall form grows
+            // and scrolls in #dpc instead of being clipped by #dpc-w's overflow:hidden.
+            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start;font-size:1.5em}#dpc-w{height:auto;min-height:100%}#dpc-content{flex-direction:column;justify-content:center;height:auto;min-height:100%}#dpc-l{flex:0 0 auto;overflow:visible;padding:2.5em 1.5em}#dpc-r{flex:0 0 auto;width:100%}#dpc-btns{align-self:stretch}.dpc-b{width:100%}}',");
             // No-QR mode: a QR on the very phone that would have to scan it is useless, so on
             // phones the whole QR column is swapped for a plain "log in via Telegram" button
             // in the action list — same session deep link, same polling, the user just taps
@@ -211,19 +259,13 @@ namespace QRAuth
             // a phone). This is a content choice, not sizing — sizing stays em-based.
             // TVs/desktops never match: their CSS viewport is ≥540px tall.
             if (hasTg && conf.show_qr)
-                sb.AppendLine("    '@media(max-width:700px),(max-height:480px) and (pointer:coarse){#dpc-r{display:none}#dpc-tgbtn{display:inline-flex}}',");
+                sb.AppendLine("    '@media(max-width:700px),(max-height:480px) and (pointer:coarse){#dpc-r{display:none}#dpc-tgbtn{display:inline-flex;order:-1}}',");
 
             // Reduced motion
-            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-actions,#dpc-steps,#dpc-qr-wrap,#dpc-qrpill,#dpc-blocked,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qr-wrap.loading::after{animation:none!important}}',");
+            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){.dpc-shackle,.dpc-plane{transition:none}#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-steps,#dpc-qr-wrap,#dpc-qrsub,#dpc-blocked,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qr-wrap.loading::after{animation:none!important}.dpc-b{animation:none!important}}',");
 
-            // TV focus ring — a crisp, solid (unblurred) offset ring per §10.3: a gap in
-            // the page base color, then an accent ring, plus the same lift as :hover. On TV
-            // the password button is focused the moment the page appears (collectionFocus
-            // below), so this is its resting look there and has to read as intentional.
-            sb.AppendLine("    '.dpc-b:focus,.dpc-b.focus{transform:translateY(-2px);outline:none}',");
-            sb.AppendLine("    '#dpc-btn:focus,#dpc-btn.focus{box-shadow:0 0 0 3px var(--dpc-base),0 0 0 6px var(--dpc-acc),0 2px 4px rgba(0,0,0,.2),0 8px 16px rgba(0,0,0,.18),0 24px 48px rgba(0,0,0,.22)!important}',");
-            sb.AppendLine("    '#dpc-tgbtn:focus,#dpc-tgbtn.focus{background:#fff;color:#131316;box-shadow:0 0 0 3px var(--dpc-base),0 0 0 6px var(--dpc-acc)!important}',");
-            sb.AppendLine("    '#dpc-qrpill:focus,#dpc-qrpill.focus{box-shadow:0 0 0 2px var(--dpc-base),0 0 0 4px #2CA5E0!important;outline:none}',");
+            // Focus for .dpc-b lives with its base styles above (white-fill swap). The round
+            // Telegram icon in the QR column can't swap colours, so it gets a ring instead.
 
             sb.AppendLine("    '.settings-input{z-index:100000!important}',");
             sb.AppendLine("    '.selectbox{z-index:100001!important}',");
@@ -238,7 +280,7 @@ namespace QRAuth
             // driven intrinsic height like the two-column layout has) and it collapses to
             // near-zero, landing near the top of #dpc-w instead of true vertical center.
             sb.AppendLine("    '#dpc-blocked{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:460px;text-align:center;gap:1.1em;padding:2em;max-width:34em;margin:0 auto;opacity:0;animation:dpcIn .5s var(--dpc-ease-out) forwards}',");
-            sb.AppendLine("    '#dpc-blocked-title{font-size:1.85em;font-weight:800;color:var(--dpc-ink);margin:0;letter-spacing:-.3px}',");
+            sb.AppendLine("    '#dpc-blocked-title{font-size:1.85em;font-weight:700;color:var(--dpc-ink);margin:0;letter-spacing:-.3px}',");
             sb.AppendLine("    '#dpc-blocked-msg{font-size:1em;color:var(--dpc-body);line-height:1.6;margin:0;max-width:32ch}'");
 
             sb.AppendLine("  ].join('');");
@@ -251,21 +293,17 @@ namespace QRAuth
             sb.AppendLine("  if (document.getElementById('dpc')) return;");
             sb.AppendLine();
 
-            sb.AppendLine("  var svgLock = '<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 8 0v4\"/></svg>';");
-            // User-supplied Telegram PNG (telegram-icon-transparent.png), downscaled to
-            // 128x128 and inlined as base64 — keeps deny.js a single generated file with
-            // no extra asset to deploy/copy alongside it. Only emitted when the QR button
-            // actually needs it (~28KB base64) — otherwise it'd bloat every deny.js even
-            // when tg_target/show_qr are unset.
-            if (hasTg && conf.show_qr)
-            {
-                sb.AppendLine("  var tgIconSrc = 'data:image/png;base64," + TgIconBase64 + "';");
-            }
+            sb.AppendLine("  var svgLock = '<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"2\"/><path class=\"dpc-shackle\" d=\"M8 11V7a4 4 0 0 1 8 0v4\"/></svg>';");
+            // Telegram paper plane: Lucide "send" (ISC license), same monochrome outline style
+            // as the lock (currentColor, 1.5 stroke) — the brand-blue PNG looked out of place
+            // on the glass.
+            sb.AppendLine("  var svgTg = '<svg class=\"dpc-plane\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\"/><path d=\"m21.854 2.147-10.94 10.939\"/></svg>';");
             // Настоящий значок Lampa (концентрические кольца) — взят из иконки Tizen/webOS
             // виджета (lampac/Modules/LampaWeb/widgets/samsung|lg/app/img/logo-icon.svg),
             // это официальный app-icon клиента — используется только в лого шапки, где
             // бренд должен быть узнаваем.
             sb.AppendLine("  var svgLampaIcon = '<path d=\"M81.6744 103.11C98.5682 93.7234 110 75.6967 110 55C110 24.6243 85.3757 0 55 0C24.6243 0 0 24.6243 0 55C0 75.6967 11.4318 93.7234 28.3255 103.11C14.8869 94.3724 6 79.224 6 62C6 34.938 27.938 13 55 13C82.062 13 104 34.938 104 62C104 79.224 95.1131 94.3725 81.6744 103.11Z\" fill=\"#fff\"/><path d=\"M92.9546 80.0076C95.5485 74.5501 97 68.4446 97 62C97 38.804 78.196 20 55 20C31.804 20 13 38.804 13 62C13 68.4446 14.4515 74.5501 17.0454 80.0076C16.3618 77.1161 16 74.1003 16 71C16 49.4609 33.4609 32 55 32C76.5391 32 94 49.4609 94 71C94 74.1003 93.6382 77.1161 92.9546 80.0076Z\" fill=\"#fff\"/><path d=\"M55 89C69.3594 89 81 77.3594 81 63C81 57.9297 79.5486 53.1983 77.0387 49.1987C82.579 54.7989 86 62.5 86 71C86 88.1208 72.1208 102 55 102C37.8792 102 24 88.1208 24 71C24 62.5 27.421 54.7989 32.9613 49.1987C30.4514 53.1983 29 57.9297 29 63C29 77.3594 40.6406 89 55 89Z\" fill=\"#fff\"/><path d=\"M73 63C73 72.9411 64.9411 81 55 81C45.0589 81 37 72.9411 37 63C37 53.0589 45.0589 45 55 45C64.9411 45 73 53.0589 73 63Z\" fill=\"#fff\"/>';");
+            sb.AppendLine("  var svgArrow = '<span class=\"dpc-b-arr\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14\"/><path d=\"M13 6l6 6-6 6\"/></svg></span>';");
             sb.AppendLine("  var svgLogoMark = '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 110 104\">' + svgLampaIcon + '</svg>';");
             sb.AppendLine();
 
@@ -355,26 +393,32 @@ namespace QRAuth
             sb.AppendLine("    + '<h1 id=\"dpc-title\"></h1>'");
             sb.AppendLine("    + '<p id=\"dpc-subtitle\"></p>'");
             sb.AppendLine("    + '<div id=\"dpc-actions\">'");
-            sb.AppendLine("    + '<button id=\"dpc-btn\" type=\"button\" class=\"dpc-b selector\">' + svgLock + '<span id=\"dpc-btn-text\">Войти по паролю</span></button>'");
+            sb.AppendLine("    + '<div id=\"dpc-btns\">'");
+            sb.AppendLine("    + '<button id=\"dpc-btn\" type=\"button\" class=\"dpc-b selector\">' + svgLock + '<span id=\"dpc-btn-text\">Войти по паролю</span>' + svgArrow + '</button>'");
             // Mobile stand-in for the QR column — hidden by CSS unless the no-QR @media
-            // rule matches. After #dpc-btn in DOM order so the TV's default focus stays
-            // on the password button.
+            // rule matches, or the page runs in a plain browser (.dpc-web, see below).
+            // After #dpc-btn in DOM order so the TV's default focus stays
+            // on the password button; on phones CSS `order:-1` shows it first instead, since
+            // there Telegram is the primary method and the password the fallback.
             if (hasTg && conf.show_qr)
             {
-                sb.AppendLine("    + '<a id=\"dpc-tgbtn\" class=\"dpc-b selector\" target=\"_blank\" rel=\"noopener\"><img src=\"' + tgIconSrc + '\" alt=\"\" /><span id=\"dpc-tgbtn-text\"></span></a>'");
+                sb.AppendLine("    + '<a id=\"dpc-tgbtn\" class=\"dpc-b selector\" target=\"_blank\" rel=\"noopener\">' + svgTg + '<span id=\"dpc-tgbtn-text\"></span>' + svgArrow + '</a>'");
             }
+            sb.AppendLine("    + '</div>'");
             sb.AppendLine("    + '<div id=\"dpc-newpass\"><span id=\"dpc-newpass-l\">Ваш пароль — запишите, он больше не будет показан</span><span id=\"dpc-newpass-v\"></span></div>'");
             sb.AppendLine("    + '<div id=\"dpc-err\"></div>'");
             sb.AppendLine("    + '</div>'");
-            sb.AppendLine("    + '<div id=\"dpc-steps\">'");
-            sb.AppendLine("    + '<div class=\"dpc-step-t\" id=\"dpc-step1\"></div>'");
-            sb.AppendLine("    + '<div class=\"dpc-step-t\" id=\"dpc-step2\"></div>'");
-            sb.AppendLine("    + '</div>'");
+            if (step1.Length > 0 || step2.Length > 0)
+            {
+                sb.AppendLine("    + '<div id=\"dpc-steps\">'");
+                if (step1.Length > 0) sb.AppendLine("    + '<div class=\"dpc-step-t\" id=\"dpc-step1\"></div>'");
+                if (step2.Length > 0) sb.AppendLine("    + '<div class=\"dpc-step-t\" id=\"dpc-step2\"></div>'");
+                sb.AppendLine("    + '</div>'");
+            }
             sb.AppendLine("    + '</div>';");
             sb.AppendLine();
 
-            // Right column HTML (only if tg + show_qr) — QR image, then a row with the
-            // round Telegram button and caption text next to it (see #dpc-qr-cta above).
+            // Right column HTML (only if tg + show_qr) — QR image, then the caption under it.
             if (hasTg && conf.show_qr)
             {
                 sb.AppendLine("  var tgUrl  = " + jsTgUrl + ";");
@@ -382,7 +426,6 @@ namespace QRAuth
                 sb.AppendLine("    + '<div id=\"dpc-r\">'");
                 sb.AppendLine("    + '<div id=\"dpc-qr-wrap\"><div id=\"dpc-qr-plate\"><div id=\"dpc-qr-box\"></div></div></div>'");
                 sb.AppendLine("    + '<div id=\"dpc-qr-cta\">'");
-                sb.AppendLine("    + '<a id=\"dpc-qrpill\" class=\"selector\" target=\"_blank\" rel=\"noopener\"><img src=\"' + tgIconSrc + '\" alt=\"Telegram\" /></a>'");
                 sb.AppendLine("    + '<div id=\"dpc-qrsub\"></div>'");
                 sb.AppendLine("    + '</div>'");
                 sb.AppendLine("    + '</div>';");
@@ -431,16 +474,19 @@ namespace QRAuth
             sb.AppendLine("  document.getElementById('dpc-logo-next').textContent = ' NextGen';");
             sb.AppendLine("  document.getElementById('dpc-title').textContent = " + jsTitle + ";");
             sb.AppendLine("  document.getElementById('dpc-subtitle').textContent = " + jsSub + ";");
-            sb.AppendLine("  document.getElementById('dpc-step1').textContent = " + jsStep1 + ";");
-            sb.AppendLine("  document.getElementById('dpc-step2').textContent = " + jsStep2 + ";");
+            if (step1.Length > 0) sb.AppendLine("  document.getElementById('dpc-step1').textContent = " + Js(step1) + ";");
+            if (step2.Length > 0) sb.AppendLine("  document.getElementById('dpc-step2').textContent = " + Js(step2) + ";");
             sb.AppendLine();
             if (hasTg && conf.show_qr)
             {
                 sb.AppendLine("  document.getElementById('dpc-qrsub').textContent = " + jsQrSub + ";");
-                sb.AppendLine("  document.getElementById('dpc-qrpill').setAttribute('aria-label', " + jsTgBtn + ");");
-                sb.AppendLine("  document.getElementById('dpc-qrpill').href = tgUrl;");
                 sb.AppendLine("  document.getElementById('dpc-tgbtn-text').textContent = " + jsTgBtn + ";");
                 sb.AppendLine("  document.getElementById('dpc-tgbtn').href = tgUrl;");
+                // Plain desktop browser (not tizen/webos/android): Telegram Desktop can open
+                // the deep link right here, so the button shows under the password one, next
+                // to the QR. On TVs there is no Telegram — the QR stays the only way. This is
+                // a content choice (like the no-QR phone rule), not a sizing branch.
+                sb.AppendLine("  if (!(window.Lampa && Lampa.Platform && Lampa.Platform.any())) { var _dw = document.getElementById('dpc-w'); if (_dw) _dw.className += ' dpc-web'; }");
                 sb.AppendLine("  renderQr(document.getElementById('dpc-qr-box'), tgUrl);");
                 sb.AppendLine();
 
@@ -488,7 +534,6 @@ namespace QRAuth
                 sb.AppendLine("      if (!res || !res.session) return;");
                 sb.AppendLine("      qrSessionId = res.session;");
                 sb.AppendLine("      var dynUrl = tgUrl.split('?')[0] + '?start=qr_' + qrSessionId;");
-                sb.AppendLine("      if (_qrpill) _qrpill.href = dynUrl;");
                 sb.AppendLine("      if (_tgbtn) _tgbtn.href = dynUrl;");
                 sb.AppendLine("      renderQr(document.getElementById('dpc-qr-box'), dynUrl);");
                 sb.AppendLine("      pollQrSession();");
@@ -503,7 +548,6 @@ namespace QRAuth
 
             sb.AppendLine("  var _btn  = document.getElementById('dpc-btn');");
             sb.AppendLine("  var _err  = document.getElementById('dpc-err');");
-            sb.AppendLine("  var _qrpill = document.getElementById('dpc-qrpill');");
             sb.AppendLine("  var _tgbtn = document.getElementById('dpc-tgbtn');");
             sb.AppendLine("  var _focusGuard = true;");
             sb.AppendLine("  var _pendingContinue = null;");
@@ -658,7 +702,7 @@ namespace QRAuth
                 // real user gesture, so no popup blocker). Lampa then re-fires that same click
                 // as 'hover:enter' ~20ms later — skip it, or the link opens twice. A remote's
                 // OK press produces only 'hover:enter', which is what window.open is for.
-                sb.AppendLine("  [_qrpill, _tgbtn].forEach(function(link) {");
+                sb.AppendLine("  [_tgbtn].forEach(function(link) {");
                 sb.AppendLine("    if (!link) return;");
                 sb.AppendLine("    var clickedAt = 0;");
                 sb.AppendLine("    link.addEventListener('click', function() { clickedAt = Date.now(); });");
