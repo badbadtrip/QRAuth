@@ -676,8 +676,10 @@ namespace QRAuth
                 sb.AppendLine("      qrStartPending = false;");
                 sb.AppendLine("      if (!res || !res.session) return;");
                 sb.AppendLine("      qrSessionId = res.session;");
-                sb.AppendLine("      var dynUrl = tgUrl.split('?')[0] + '?start=qr_' + qrSessionId;");
-                sb.AppendLine("      if (_tgbtn) _tgbtn.href = dynUrl;");
+                // tg_ vs qr_ only changes the bot's wording (button tap vs scan)
+                sb.AppendLine("      var baseUrl = tgUrl.split('?')[0];");
+                sb.AppendLine("      var dynUrl = baseUrl + '?start=qr_' + qrSessionId;");
+                sb.AppendLine("      if (_tgbtn) _tgbtn.href = baseUrl + '?start=tg_' + qrSessionId;");
                 sb.AppendLine("      renderQr(document.getElementById('dpc-qr-box'), dynUrl);");
                 sb.AppendLine("      pollQrSession();");
                 // Bot module off/unreachable: the static tgUrl QR still opens the bot, so no

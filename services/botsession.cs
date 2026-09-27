@@ -99,9 +99,11 @@ namespace QRAuth.Services
             if (!text.StartsWith("/start")) return;
 
             var payload = text.Length > 6 ? text.Substring(6).Trim() : "";
-            if (payload.StartsWith("qr_", StringComparison.Ordinal))
+            // qr_ = scanned from the TV/desktop QR, tg_ = tapped "Войти через Telegram" on the
+            // same device; same session flow, only the wording differs
+            if (payload.StartsWith("qr_", StringComparison.Ordinal) || payload.StartsWith("tg_", StringComparison.Ordinal))
             {
-                await HandleQrStartAsync(bot, msg, payload.Substring(3), ct);
+                await HandleQrStartAsync(bot, msg, payload.Substring(3), fromQr: payload[0] == 'q', ct);
                 return;
             }
 
@@ -118,7 +120,7 @@ namespace QRAuth.Services
             if (IsAdmin(userId))
             {
                 await bot.SendMessage(msg.Chat.Id,
-                    "👑  Привет, админ!\n\nЭтот бот подтверждает вход в Lampa по QR-коду с экрана авторизации и обрабатывает заявки на доступ. Кнопки ниже — панель администратора.",
+                    "👑  Привет, админ!\n\nЭтот бот подтверждает вход в Lampa через Telegram и обрабатывает заявки на доступ. Кнопки ниже — панель администратора.",
                     cancellationToken: ct);
                 await ShowAdminPanelAsync(bot, msg.Chat.Id, ct);
                 return;
@@ -138,7 +140,7 @@ namespace QRAuth.Services
                 new[] { InlineKeyboardButton.WithCallbackData("🔑  Запросить доступ", "reqaccess") }
             });
             await bot.SendMessage(msg.Chat.Id,
-                "👋  Привет!\n\nЭтот бот подтверждает вход в Lampa по QR-коду с экрана авторизации и может запросить для вас доступ у администратора.",
+                "👋  Привет!\n\nЭтот бот подтверждает вход в Lampa через Telegram и может запросить для вас доступ у администратора.",
                 replyMarkup: kb, cancellationToken: ct);
         }
 
@@ -168,8 +170,9 @@ namespace QRAuth.Services
             await bot.SendMessage(chatId, text, cancellationToken: ct);
         }
 
-        /// <summary>Deep link from the deny-page QR: https://t.me/&lt;bot&gt;?start=qr_&lt;sessionId&gt;.</summary>
-        async Task HandleQrStartAsync(ITelegramBotClient bot, Message msg, string sessionId, CancellationToken ct)
+        /// <summary>Deep link from the deny page: https://t.me/&lt;bot&gt;?start=qr_&lt;sessionId&gt; from the
+        /// QR, ?start=tg_&lt;sessionId&gt; from the "Войти через Telegram" button.</summary>
+        async Task HandleQrStartAsync(ITelegramBotClient bot, Message msg, string sessionId, bool fromQr, CancellationToken ct)
         {
             long userId = msg.From?.Id ?? 0;
 
@@ -214,10 +217,12 @@ namespace QRAuth.Services
 
             var kb = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("✅  Подтвердить вход", "qrauth:" + sessionId) }
+                new[] { InlineKeyboardButton.WithCallbackData("✅  Подтвердить вход", (fromQr ? "qrauth:" : "tgauth:") + sessionId) }
             });
             await bot.SendMessage(msg.Chat.Id,
-                "🖥  Кто-то пытается войти в Lampa с помощью этого QR-кода.\n\nЕсли это вы — нажмите кнопку ниже.",
+                fromQr
+                    ? "🖥  Кто-то отсканировал QR-код на экране входа Lampa.\n\nЕсли это вы — нажмите кнопку ниже."
+                    : "🖥  Кто-то пытается войти в Lampa через Telegram.\n\nЕсли это вы — нажмите кнопку ниже.",
                 replyMarkup: kb, cancellationToken: ct);
         }
 
@@ -228,7 +233,8 @@ namespace QRAuth.Services
             if (data == "reqaccess") { await HandleRequestAccessAsync(bot, cb, ct); return; }
             if (data.StartsWith("grant:", StringComparison.Ordinal)) { await HandleGrantAsync(bot, cb, data.Substring(6), ct); return; }
             if (data.StartsWith("deny:", StringComparison.Ordinal)) { await HandleDenyAsync(bot, cb, data.Substring(5), ct); return; }
-            if (data.StartsWith("qrauth:", StringComparison.Ordinal)) { await HandleQrAuthAsync(bot, cb, data.Substring(7), ct); return; }
+            if (data.StartsWith("qrauth:", StringComparison.Ordinal)) { await HandleQrAuthAsync(bot, cb, data.Substring(7), fromQr: true, ct); return; }
+            if (data.StartsWith("tgauth:", StringComparison.Ordinal)) { await HandleQrAuthAsync(bot, cb, data.Substring(7), fromQr: false, ct); return; }
             if (data == "ulist") { await HandleUListAsync(bot, cb, ct); return; }
             if (data.StartsWith("uview:", StringComparison.Ordinal)) { await HandleUViewAsync(bot, cb, data.Substring(6), ct); return; }
             if (data.StartsWith("ublockask:", StringComparison.Ordinal)) { await HandleUBlockAskAsync(bot, cb, data.Substring(10), ct); return; }
@@ -238,7 +244,7 @@ namespace QRAuth.Services
             await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct);
         }
 
-        async Task HandleQrAuthAsync(ITelegramBotClient bot, CallbackQuery cb, string sessionId, CancellationToken ct)
+        async Task HandleQrAuthAsync(ITelegramBotClient bot, CallbackQuery cb, string sessionId, bool fromQr, CancellationToken ct)
         {
             var user = _repo.GetByTgId(cb.From.Id);
             if (!HasAccess(user))
@@ -249,18 +255,22 @@ namespace QRAuth.Services
 
             if (!QrAuthSessions.TryConfirm(sessionId, user.Id))
             {
-                await bot.AnswerCallbackQuery(cb.Id, "Ссылка устарела, отсканируйте QR заново.", showAlert: true, cancellationToken: ct);
+                await bot.AnswerCallbackQuery(cb.Id,
+                    fromQr ? "Ссылка устарела, отсканируйте QR заново." : "Ссылка устарела. Нажмите «Войти через Telegram» ещё раз.",
+                    showAlert: true, cancellationToken: ct);
                 return;
             }
 
             await bot.AnswerCallbackQuery(cb.Id, "✅  Готово", cancellationToken: ct);
             long chatId = cb.Message?.Chat.Id ?? 0;
             int msgId = cb.Message?.MessageId ?? 0;
-            await bot.EditMessageText(chatId, msgId, "✅  Вход подтверждён. Вернитесь на экран входа Lampa.", cancellationToken: ct);
+            await bot.EditMessageText(chatId, msgId, fromQr
+                ? "✅  Вход подтверждён. Lampa на экране войдёт сама."
+                : "✅  Вход подтверждён. Вернитесь в Lampa — вход выполнится сам.", cancellationToken: ct);
 
             var lines = new List<string>
             {
-                "🔓  <b>QR-вход подтверждён</b>",
+                fromQr ? "🔓  <b>Вход по QR подтверждён</b>" : "🔓  <b>Вход через Telegram подтверждён</b>",
                 $"👤  <b>{HtmlEsc(user.Comment)}</b>",
                 $"🆔  <code>{user.TgId}</code>"
             };
@@ -658,8 +668,8 @@ namespace QRAuth.Services
                 FileLog.Write($"[TelegramBot] QR-сессия {sessionId} авто-подтверждена при выдаче tgId={tgId}");
 
             var text = autoConfirmed
-                ? $"✅  Администратор выдал вам доступ к Lampa. Экран входа должен открыться сам.\n\nЕсли нет — пароль: <code>{token}</code>"
-                : $"✅  Администратор выдал вам доступ к Lampa.\n\nОтсканируйте QR на экране входа ещё раз — он войдёт сам. Либо введите пароль вручную: <code>{token}</code>";
+                ? $"✅  Администратор выдал вам доступ к Lampa. Вернитесь в Lampa — вход выполнится сам.\n\nЕсли нет — пароль: <code>{token}</code>"
+                : $"✅  Администратор выдал вам доступ к Lampa.\n\nВернитесь на экран входа Lampa и войдите через Telegram ещё раз. Либо введите пароль вручную: <code>{token}</code>";
 
             try
             {

@@ -154,6 +154,7 @@
 ```
 deny.js:  GET /tgbot/qr/start  → { session }
           строит QR на https://t.me/<bot>?start=qr_<session>
+          (кнопка «Войти через Telegram» - ?start=tg_<session>)
         │
         ▼
 Пользователь сканирует QR → /start qr_<session> в боте
