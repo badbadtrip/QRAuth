@@ -29,6 +29,7 @@ namespace QRAuth
             string wallLqip = hasWall ? PosterWall.WallLqipBase64() : null;
             string wallGlass = hasWall ? PosterWall.WallGlassBase64() : null;
             bool   has4k    = hasWall && PosterWall.WallPath(true) != null;
+            string posterLayers = conf.poster_wall ? "<div id=\\\"dpc-posters\\\"></div><div id=\\\"dpc-shade\\\"></div>" : "";
 
             string jsTgUrl  = Js(tgUrl);
             string jsTitle  = Js(string.IsNullOrWhiteSpace(conf.page_title)     ? "Вход в Lampa" : conf.page_title);
@@ -291,9 +292,11 @@ namespace QRAuth
             // (Lampa's own UI compensates with its own mobile CSS; this page has no such
             // layer and rendered tiny — 31px-tall buttons, 10px body text). Below 700px the
             // clamp is always active, so 1.5em here is a fixed ~16px base, not a device guess.
-            // Content is vertically centered via min-height (not height) so a tall form grows
-            // and scrolls in #dpc instead of being clipped by #dpc-w's overflow:hidden.
-            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start;font-size:1.5em}#dpc-w{height:auto;min-height:100%}#dpc-content{flex-direction:column;justify-content:center;height:auto;min-height:100%}#dpc-l{flex:0 0 auto;overflow:visible;font-size:1em;padding:2.5em 1.5em}#dpc-r{flex:0 0 auto;width:100%}#dpc-btns{align-self:stretch}.dpc-b{width:100%;font-size:1.05em}}',");
+            // Content is vertically centered: #dpc-w is a flex column with min-height:100% and
+            // #dpc-content grows into it (a plain min-height:100% on #dpc-content didn't resolve
+            // against #dpc-w's auto height, so short content — the ban screen — sat at the
+            // top). A tall form still grows and scrolls in #dpc instead of being clipped.
+            sb.AppendLine("    '@media(max-width:700px){#dpc{align-items:flex-start;font-size:1.5em}#dpc-w{height:auto;min-height:100%;display:flex;flex-direction:column}#dpc-content{flex:1 0 auto;flex-direction:column;justify-content:center;height:auto}#dpc-l{flex:0 0 auto;overflow:visible;font-size:1em;padding:2.5em 1.5em}#dpc-r{flex:0 0 auto;width:100%}#dpc-btns{align-self:stretch}.dpc-b{width:100%;font-size:1.05em}}',");
             // No-QR mode: a QR on the very phone that would have to scan it is useless, so on
             // phones the whole QR column is swapped for a plain "log in via Telegram" button
             // in the action list — same session deep link, same polling, the user just taps
@@ -305,7 +308,7 @@ namespace QRAuth
                 sb.AppendLine("    '@media(max-width:700px),(max-height:480px) and (pointer:coarse){#dpc-r{display:none}#dpc-tgbtn{display:inline-flex;order:-1}}',");
 
             // Reduced motion
-            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){.dpc-shackle,.dpc-plane{transition:none}#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-steps,#dpc-qr-wrap,#dpc-qrsub,#dpc-blocked,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qr-wrap.loading::after{animation:none!important}.dpc-b{animation:none!important}}',");
+            sb.AppendLine("    '@media(prefers-reduced-motion:reduce){.dpc-shackle,.dpc-plane{transition:none}#dpc-w,#dpc-logo,#dpc-title,#dpc-subtitle,#dpc-steps,#dpc-qr-wrap,#dpc-qrsub,#dpc-newpass{animation:none!important;opacity:1!important;transform:none!important}#dpc-qr-wrap.loading::after{animation:none!important}.dpc-b{animation:none!important}}',");
 
             // Focus for .dpc-b lives with its base styles above (white-fill swap). The round
             // Telegram icon in the QR column can't swap colours, so it gets a ring instead.
@@ -313,30 +316,22 @@ namespace QRAuth
             sb.AppendLine("    '.settings-input{z-index:100000!important}',");
             sb.AppendLine("    '.selectbox{z-index:100001!important}',");
 
-            // Banned/expired state (checkAutch's denymsg branch) — deliberately NOT the
-            // addDevice() login form: retrying a password can't undo a ban or expiry, so
-            // showing that form would just invite a pointless retry loop. Reuses #dpc/#dpc-w/
-            // #dpc-bg (the same full-bleed card chrome) so it doesn't look like a different,
-            // broken page — just a simple centered message instead of the two-column layout.
-            // min-height matches #dpc-content's own fallback above — without it this block's
-            // height:100% has nothing definite to resolve against (short content, no padding-
-            // driven intrinsic height like the two-column layout has) and it collapses to
-            // near-zero, landing near the top of #dpc-w instead of true vertical center.
-            sb.AppendLine("    '#dpc-blocked{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:460px;text-align:center;gap:1.1em;padding:2em;max-width:34em;margin:0 auto;opacity:0;animation:dpcIn .5s var(--dpc-ease-out) forwards}',");
-            sb.AppendLine("    '#dpc-blocked-title{font-size:1.85em;font-weight:700;color:var(--dpc-ink);margin:0;letter-spacing:-.3px}',");
-            sb.AppendLine("    '#dpc-blocked-msg{font-size:1em;color:var(--dpc-body);line-height:1.6;margin:0;max-width:32ch}'");
 
             sb.AppendLine("  ].join('');");
             sb.AppendLine("  document.head.appendChild(s);");
             sb.AppendLine("})();");
             sb.AppendLine();
 
-            // ── addDevice ────────────────────────────────────────────────────
-            sb.AppendLine("function addDevice(message) {");
-            sb.AppendLine("  if (document.getElementById('dpc')) return;");
+            // ── dpcWallMount ─────────────────────────────────────────────────
+            // Poster wall (pre-rendered wall.jpg, or the tile fallback) mounted into the
+            // #dpc-posters/#dpc-shade layers. Shared by addDevice() and showBlocked(); call it
+            // right after #dpc is in the DOM.
+            if (conf.poster_wall)
+            {
+                sb.AppendLine("function dpcWallMount() {");
             if (hasWall)
             {
-                // Start wall.jpg before building the DOM (not on phones ≤700px — they use tiles).
+                // Start wall.jpg first (not on phones ≤700px — they use tiles).
                 // ?v= is the set version, so a repeat visit is a cache hit.
                 // 4K file when the screen is wider than ~2000 device px (2K/4K monitors, 4K TVs
                 // whose WebView reports a high devicePixelRatio); 1080p otherwise.
@@ -344,6 +339,123 @@ namespace QRAuth
                 sb.AppendLine("  var dpcWallImg = null;");
                 sb.AppendLine("  if (dpcWall) { dpcWallImg = new Image(); dpcWallImg.src = dpcWall; }");
             }
+                // count=0 (module off, TMDB unreachable, first fetch not done yet) → nothing
+                // happens and the plain gradient stays. Order is shuffled per page load; 72
+                // tiles (12 per row) cycle through the ≤30 cached files to fill the tilted wall.
+                sb.AppendLine("  function dpcPosters() {");
+                sb.AppendLine("  (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/posters', function(res) {");
+                sb.AppendLine("    var box = document.getElementById('dpc-posters');");
+                sb.AppendLine("    if (!box || !res || !res.count) return;");
+                sb.AppendLine("    var order = [], i, j, t;");
+                sb.AppendLine("    for (i = 0; i < res.count; i++) order.push(i);");
+                sb.AppendLine("    for (i = order.length - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = order[i]; order[i] = order[j]; order[j] = t; }");
+                // Preferred path: the server's pre-rendered wall.jpg (PosterWall.BuildWall) —
+                // one request, one decode, a flat background with no 3D layer; that's what
+                // TVs needed. Phones (≤700px) keep the tiles: a centre crop of a 16:9 image
+                // on a portrait screen would blow the posters up ~3x, and phones handle the
+                // tiles fine. No wall.jpg (NetVips unavailable) or it fails to load → tiles.
+                sb.AppendLine("    function tiles() {");
+                // Preload each unique file once, then build all 72 tiles in one fragment and
+                // reveal the wall once — a single layout + raster instead of 72 pop-ins, each
+                // repainting the 3D layer while the page is still animating in. 2.5s cap so a
+                // slow/failed poster doesn't hold the wall back (late ones fill in from cache).
+                sb.AppendLine("      var urls = [], pre = [], loaded = 0, shown = false;");
+                sb.AppendLine("      for (i = 0; i < order.length; i++) urls.push('{localhost}/tgbot/qr/poster/' + order[i] + '?v=' + res.v);");
+                sb.AppendLine("      function reveal() {");
+                sb.AppendLine("        if (shown) return;");
+                sb.AppendLine("        shown = true;");
+                sb.AppendLine("        var frag = document.createDocumentFragment();");
+                sb.AppendLine("        for (var k = 0; k < 72; k++) {");
+                sb.AppendLine("          var d = document.createElement('div');");
+                sb.AppendLine("          d.style.backgroundImage = 'url(\"' + urls[k % urls.length] + '\")';");
+                sb.AppendLine("          frag.appendChild(d);");
+                sb.AppendLine("        }");
+                sb.AppendLine("        box.appendChild(frag);");
+                sb.AppendLine("        var w = document.getElementById('dpc-w');");
+                sb.AppendLine("        setTimeout(function() { if (w) w.className += ' dpc-has-posters'; }, 30);");
+                sb.AppendLine("      }");
+                sb.AppendLine("      function one() { if (++loaded >= urls.length) reveal(); }");
+                sb.AppendLine("      for (i = 0; i < urls.length; i++) { var im = new Image(); im.onload = one; im.onerror = one; im.src = urls[i]; pre.push(im); }");
+                sb.AppendLine("      setTimeout(reveal, 2500);");
+                sb.AppendLine("    }");
+                sb.AppendLine("    if (res.wall && window.innerWidth > 700) {");
+                sb.AppendLine("      var wurl = '{localhost}/tgbot/qr/wall?v=' + res.v, wimg = new Image();");
+                sb.AppendLine("      wimg.onload = function() {");
+                sb.AppendLine("        box.className = 'dpc-wallimg';");
+                sb.AppendLine("        box.style.backgroundImage = 'url(\"' + wurl + '\")';");
+                sb.AppendLine("        var w = document.getElementById('dpc-w');");
+                sb.AppendLine("        setTimeout(function() { if (w) w.className += ' dpc-has-posters'; }, 30);");
+                sb.AppendLine("      };");
+                sb.AppendLine("      wimg.onerror = tiles;");
+                sb.AppendLine("      wimg.src = wurl;");
+                sb.AppendLine("    } else tiles();");
+                sb.AppendLine("  }, function() {});");
+                sb.AppendLine("  }");
+                if (hasWall)
+                {
+                    // Direct wall mode: the preview (inline, ~1KB) sits under wall.jpg in the same
+                    // background, so the wall's colours are on screen from the first paint and the
+                    // full image paints over it when decoded. Shade on immediately, no fade. If
+                    // wall.jpg fails (e.g. stale deny.js after a refresh) → manifest/tiles path.
+                    string lq = wallLqip != null ? ", url(data:image/jpeg;base64," + wallLqip + ")" : "";
+                    sb.AppendLine("  if (dpcWall) {");
+                    sb.AppendLine("    var dpcBox = document.getElementById('dpc-posters');");
+                    sb.AppendLine("    dpcBox.className = 'dpc-wallimg';");
+                    sb.AppendLine("    dpcBox.style.backgroundImage = 'url(\"' + dpcWall + '\")" + lq + "';");
+                    sb.AppendLine("    document.getElementById('dpc-w').className += ' dpc-has-posters';");
+                    if (wallGlass != null)
+                    {
+                        // Wall is drawn "cover" into #dpc-w: scale max(W/1920, H/1080), centred. Each
+                        // visible button gets: tint, the shade gradients at screen size, the glass
+                        // image at wall-cover size, all offset by the button's padding-box
+                        // position, so its background is exactly what sits behind it, blurred.
+                        sb.AppendLine("    var dpcGlassImg = 'linear-gradient(rgba(22,22,25,.38),rgba(22,22,25,.38)),' + " + Js(Shade) + " + ',url(data:image/jpeg;base64," + wallGlass + ")';");
+                        sb.AppendLine("    var dpcGlassFit = function() {");
+                        sb.AppendLine("      var w = document.getElementById('dpc-w');");
+                        sb.AppendLine("      if (!w || w.className.indexOf('dpc-glass') < 0) return;");
+                        sb.AppendLine("      var W = w.clientWidth, H = w.clientHeight, wr = w.getBoundingClientRect();");
+                        sb.AppendLine("      var k = Math.max(W / 1920, H / 1080), cw = 1920 * k, ch = 1080 * k;");
+                        sb.AppendLine("      var bs = w.querySelectorAll('.dpc-b');");
+                        sb.AppendLine("      for (var i = 0; i < bs.length; i++) {");
+                        sb.AppendLine("        var b = bs[i];");
+                        sb.AppendLine("        if (!b.offsetWidth) continue;");
+                        sb.AppendLine("        var r = b.getBoundingClientRect(), x = r.left - wr.left + b.clientLeft, y = r.top - wr.top + b.clientTop;");
+                        sb.AppendLine("        var scr = W + 'px ' + H + 'px', at = (-x) + 'px ' + (-y) + 'px';");
+                        sb.AppendLine("        if (!b._dpcGlass) { b.style.backgroundImage = dpcGlassImg; b._dpcGlass = 1; }");
+                        sb.AppendLine("        b.style.backgroundSize = '100% 100%,' + scr + ',' + scr + ',' + scr + ',' + cw + 'px ' + ch + 'px';");
+                        sb.AppendLine("        b.style.backgroundPosition = '0 0,' + at + ',' + at + ',' + at + ',' + ((W - cw) / 2 - x) + 'px ' + ((H - ch) / 2 - y) + 'px';");
+                        sb.AppendLine("      }");
+                        sb.AppendLine("    };");
+                        sb.AppendLine("    document.getElementById('dpc-w').className += ' dpc-glass';");
+                        sb.AppendLine("    dpcGlassFit();");
+                        // Re-fit when the layout moves: resize, the error/new-password block
+                        // appearing (re-centres the column), late font swap.
+                        sb.AppendLine("    window.addEventListener('resize', dpcGlassFit);");
+                        sb.AppendLine("    setTimeout(dpcGlassFit, 300);");
+                        sb.AppendLine("    var dpcActs = document.getElementById('dpc-actions'); if (dpcActs && window.ResizeObserver) { var dpcRo = new ResizeObserver(function() { dpcGlassFit(); }); dpcRo.observe(dpcActs); }");
+                    }
+                    sb.AppendLine("    dpcWallImg.onerror = function() {");
+                    sb.AppendLine("      var w = document.getElementById('dpc-w');");
+                    sb.AppendLine("      dpcBox.className = ''; dpcBox.style.backgroundImage = '';");
+                    sb.AppendLine("      w.className = w.className.replace(' dpc-has-posters', '').replace(' dpc-glass', '');");
+                    sb.AppendLine("      var bs = w.querySelectorAll('.dpc-b');");
+                    sb.AppendLine("      for (var i = 0; i < bs.length; i++) { bs[i].style.backgroundImage = bs[i].style.backgroundSize = bs[i].style.backgroundPosition = ''; bs[i]._dpcGlass = 0; }");
+                    sb.AppendLine("      dpcPosters();");
+                    sb.AppendLine("    };");
+                    sb.AppendLine("  } else dpcPosters();");
+                }
+                else
+                {
+                    sb.AppendLine("  dpcPosters();");
+                }
+                sb.AppendLine();
+                sb.AppendLine("}");
+                sb.AppendLine();
+            }
+
+            // ── addDevice ────────────────────────────────────────────────────
+            sb.AppendLine("function addDevice(message) {");
+            sb.AppendLine("  if (document.getElementById('dpc')) return;");
             sb.AppendLine();
 
             sb.AppendLine("  var svgLock = '<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"2\"/><path class=\"dpc-shackle\" d=\"M8 11V7a4 4 0 0 1 8 0v4\"/></svg>';");
@@ -492,124 +604,13 @@ namespace QRAuth
             }
 
             sb.AppendLine();
-            string posterLayers = conf.poster_wall ? "<div id=\\\"dpc-posters\\\"></div><div id=\\\"dpc-shade\\\"></div>" : "";
             sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\">" + posterLayers + "<div id=\"dpc-bg\"></div><div id=\"dpc-content\">' + leftHtml + rightHtml + '</div></div></div>';");
             sb.AppendLine("  document.body.insertAdjacentHTML('beforeend', html);");
             sb.AppendLine();
 
             if (conf.poster_wall)
-            {
-                // count=0 (module off, TMDB unreachable, first fetch not done yet) → nothing
-                // happens and the plain gradient stays. Order is shuffled per page load; 72
-                // tiles (12 per row) cycle through the ≤30 cached files to fill the tilted wall.
-                sb.AppendLine("  function dpcPosters() {");
-                sb.AppendLine("  (new Lampa.Reguest()).silent('{localhost}/tgbot/qr/posters', function(res) {");
-                sb.AppendLine("    var box = document.getElementById('dpc-posters');");
-                sb.AppendLine("    if (!box || !res || !res.count) return;");
-                sb.AppendLine("    var order = [], i, j, t;");
-                sb.AppendLine("    for (i = 0; i < res.count; i++) order.push(i);");
-                sb.AppendLine("    for (i = order.length - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = order[i]; order[i] = order[j]; order[j] = t; }");
-                // Preferred path: the server's pre-rendered wall.jpg (PosterWall.BuildWall) —
-                // one request, one decode, a flat background with no 3D layer; that's what
-                // TVs needed. Phones (≤700px) keep the tiles: a centre crop of a 16:9 image
-                // on a portrait screen would blow the posters up ~3x, and phones handle the
-                // tiles fine. No wall.jpg (NetVips unavailable) or it fails to load → tiles.
-                sb.AppendLine("    function tiles() {");
-                // Preload each unique file once, then build all 72 tiles in one fragment and
-                // reveal the wall once — a single layout + raster instead of 72 pop-ins, each
-                // repainting the 3D layer while the page is still animating in. 2.5s cap so a
-                // slow/failed poster doesn't hold the wall back (late ones fill in from cache).
-                sb.AppendLine("      var urls = [], pre = [], loaded = 0, shown = false;");
-                sb.AppendLine("      for (i = 0; i < order.length; i++) urls.push('{localhost}/tgbot/qr/poster/' + order[i] + '?v=' + res.v);");
-                sb.AppendLine("      function reveal() {");
-                sb.AppendLine("        if (shown) return;");
-                sb.AppendLine("        shown = true;");
-                sb.AppendLine("        var frag = document.createDocumentFragment();");
-                sb.AppendLine("        for (var k = 0; k < 72; k++) {");
-                sb.AppendLine("          var d = document.createElement('div');");
-                sb.AppendLine("          d.style.backgroundImage = 'url(\"' + urls[k % urls.length] + '\")';");
-                sb.AppendLine("          frag.appendChild(d);");
-                sb.AppendLine("        }");
-                sb.AppendLine("        box.appendChild(frag);");
-                sb.AppendLine("        var w = document.getElementById('dpc-w');");
-                sb.AppendLine("        setTimeout(function() { if (w) w.className += ' dpc-has-posters'; }, 30);");
-                sb.AppendLine("      }");
-                sb.AppendLine("      function one() { if (++loaded >= urls.length) reveal(); }");
-                sb.AppendLine("      for (i = 0; i < urls.length; i++) { var im = new Image(); im.onload = one; im.onerror = one; im.src = urls[i]; pre.push(im); }");
-                sb.AppendLine("      setTimeout(reveal, 2500);");
-                sb.AppendLine("    }");
-                sb.AppendLine("    if (res.wall && window.innerWidth > 700) {");
-                sb.AppendLine("      var wurl = '{localhost}/tgbot/qr/wall?v=' + res.v, wimg = new Image();");
-                sb.AppendLine("      wimg.onload = function() {");
-                sb.AppendLine("        box.className = 'dpc-wallimg';");
-                sb.AppendLine("        box.style.backgroundImage = 'url(\"' + wurl + '\")';");
-                sb.AppendLine("        var w = document.getElementById('dpc-w');");
-                sb.AppendLine("        setTimeout(function() { if (w) w.className += ' dpc-has-posters'; }, 30);");
-                sb.AppendLine("      };");
-                sb.AppendLine("      wimg.onerror = tiles;");
-                sb.AppendLine("      wimg.src = wurl;");
-                sb.AppendLine("    } else tiles();");
-                sb.AppendLine("  }, function() {});");
-                sb.AppendLine("  }");
-                if (hasWall)
-                {
-                    // Direct wall mode: the preview (inline, ~1KB) sits under wall.jpg in the same
-                    // background, so the wall's colours are on screen from the first paint and the
-                    // full image paints over it when decoded. Shade on immediately, no fade. If
-                    // wall.jpg fails (e.g. stale deny.js after a refresh) → manifest/tiles path.
-                    string lq = wallLqip != null ? ", url(data:image/jpeg;base64," + wallLqip + ")" : "";
-                    sb.AppendLine("  if (dpcWall) {");
-                    sb.AppendLine("    var dpcBox = document.getElementById('dpc-posters');");
-                    sb.AppendLine("    dpcBox.className = 'dpc-wallimg';");
-                    sb.AppendLine("    dpcBox.style.backgroundImage = 'url(\"' + dpcWall + '\")" + lq + "';");
-                    sb.AppendLine("    document.getElementById('dpc-w').className += ' dpc-has-posters';");
-                    if (wallGlass != null)
-                    {
-                        // Wall is drawn "cover" into #dpc-w: scale max(W/1920, H/1080), centred. Each
-                        // visible button gets: tint, the shade gradients at screen size, the glass
-                        // image at wall-cover size, all offset by the button's padding-box
-                        // position, so its background is exactly what sits behind it, blurred.
-                        sb.AppendLine("    var dpcGlassImg = 'linear-gradient(rgba(22,22,25,.38),rgba(22,22,25,.38)),' + " + Js(Shade) + " + ',url(data:image/jpeg;base64," + wallGlass + ")';");
-                        sb.AppendLine("    var dpcGlassFit = function() {");
-                        sb.AppendLine("      var w = document.getElementById('dpc-w');");
-                        sb.AppendLine("      if (!w || w.className.indexOf('dpc-glass') < 0) return;");
-                        sb.AppendLine("      var W = w.clientWidth, H = w.clientHeight, wr = w.getBoundingClientRect();");
-                        sb.AppendLine("      var k = Math.max(W / 1920, H / 1080), cw = 1920 * k, ch = 1080 * k;");
-                        sb.AppendLine("      var bs = w.querySelectorAll('.dpc-b');");
-                        sb.AppendLine("      for (var i = 0; i < bs.length; i++) {");
-                        sb.AppendLine("        var b = bs[i];");
-                        sb.AppendLine("        if (!b.offsetWidth) continue;");
-                        sb.AppendLine("        var r = b.getBoundingClientRect(), x = r.left - wr.left + b.clientLeft, y = r.top - wr.top + b.clientTop;");
-                        sb.AppendLine("        var scr = W + 'px ' + H + 'px', at = (-x) + 'px ' + (-y) + 'px';");
-                        sb.AppendLine("        if (!b._dpcGlass) { b.style.backgroundImage = dpcGlassImg; b._dpcGlass = 1; }");
-                        sb.AppendLine("        b.style.backgroundSize = '100% 100%,' + scr + ',' + scr + ',' + scr + ',' + cw + 'px ' + ch + 'px';");
-                        sb.AppendLine("        b.style.backgroundPosition = '0 0,' + at + ',' + at + ',' + at + ',' + ((W - cw) / 2 - x) + 'px ' + ((H - ch) / 2 - y) + 'px';");
-                        sb.AppendLine("      }");
-                        sb.AppendLine("    };");
-                        sb.AppendLine("    document.getElementById('dpc-w').className += ' dpc-glass';");
-                        sb.AppendLine("    dpcGlassFit();");
-                        // Re-fit when the layout moves: resize, the error/new-password block
-                        // appearing (re-centres the column), late font swap.
-                        sb.AppendLine("    window.addEventListener('resize', dpcGlassFit);");
-                        sb.AppendLine("    setTimeout(dpcGlassFit, 300);");
-                        sb.AppendLine("    if (window.ResizeObserver) { var dpcRo = new ResizeObserver(function() { dpcGlassFit(); }); dpcRo.observe(document.getElementById('dpc-actions')); }");
-                    }
-                    sb.AppendLine("    dpcWallImg.onerror = function() {");
-                    sb.AppendLine("      var w = document.getElementById('dpc-w');");
-                    sb.AppendLine("      dpcBox.className = ''; dpcBox.style.backgroundImage = '';");
-                    sb.AppendLine("      w.className = w.className.replace(' dpc-has-posters', '').replace(' dpc-glass', '');");
-                    sb.AppendLine("      var bs = w.querySelectorAll('.dpc-b');");
-                    sb.AppendLine("      for (var i = 0; i < bs.length; i++) { bs[i].style.backgroundImage = bs[i].style.backgroundSize = bs[i].style.backgroundPosition = ''; bs[i]._dpcGlass = 0; }");
-                    sb.AppendLine("      dpcPosters();");
-                    sb.AppendLine("    };");
-                    sb.AppendLine("  } else dpcPosters();");
-                }
-                else
-                {
-                    sb.AppendLine("  dpcPosters();");
-                }
-                sb.AppendLine();
-            }
+                sb.AppendLine("  dpcWallMount();");
+            sb.AppendLine();
 
             // Текст из init.conf проставляется через textContent/href, а не в разметку —
             // так браузер сам экранирует HTML-спецсимволы вместо ручного экранирования.
@@ -891,14 +892,23 @@ namespace QRAuth
             // (ban or expiry) — no password field, nothing to retry.
             sb.AppendLine("function showBlocked(msg) {");
             sb.AppendLine("  if (document.getElementById('dpc')) return;");
-            sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\"><div id=\"dpc-bg\"></div>'");
-            sb.AppendLine("    + '<div id=\"dpc-blocked\">'");
-            sb.AppendLine("    + '<h1 id=\"dpc-blocked-title\"></h1>'");
-            sb.AppendLine("    + '<p id=\"dpc-blocked-msg\"></p>'");
-            sb.AppendLine("    + '</div></div></div>';");
+            sb.AppendLine("  var svgLampaIcon = '<path d=\"M81.6744 103.11C98.5682 93.7234 110 75.6967 110 55C110 24.6243 85.3757 0 55 0C24.6243 0 0 24.6243 0 55C0 75.6967 11.4318 93.7234 28.3255 103.11C14.8869 94.3724 6 79.224 6 62C6 34.938 27.938 13 55 13C82.062 13 104 34.938 104 62C104 79.224 95.1131 94.3725 81.6744 103.11Z\" fill=\"#fff\"/><path d=\"M92.9546 80.0076C95.5485 74.5501 97 68.4446 97 62C97 38.804 78.196 20 55 20C31.804 20 13 38.804 13 62C13 68.4446 14.4515 74.5501 17.0454 80.0076C16.3618 77.1161 16 74.1003 16 71C16 49.4609 33.4609 32 55 32C76.5391 32 94 49.4609 94 71C94 74.1003 93.6382 77.1161 92.9546 80.0076Z\" fill=\"#fff\"/><path d=\"M55 89C69.3594 89 81 77.3594 81 63C81 57.9297 79.5486 53.1983 77.0387 49.1987C82.579 54.7989 86 62.5 86 71C86 88.1208 72.1208 102 55 102C37.8792 102 24 88.1208 24 71C24 62.5 27.421 54.7989 32.9613 49.1987C30.4514 53.1983 29 57.9297 29 63C29 77.3594 40.6406 89 55 89Z\" fill=\"#fff\"/><path d=\"M73 63C73 72.9411 64.9411 81 55 81C45.0589 81 37 72.9411 37 63C37 53.0589 45.0589 45 55 45C64.9411 45 73 53.0589 73 63Z\" fill=\"#fff\"/>';");
+            // Same chrome as the login page (poster wall, shade, left-column logo/title/text),
+            // just without buttons, QR and steps. Lampac core sends "Вы заблокированы" when
+            // the user has no ban_msg; that only repeats the title, so a plain sentence
+            // replaces it. Expiry / IP-limit messages are shown as sent.
+            sb.AppendLine("  var html = '<div id=\"dpc\"><div id=\"dpc-w\">" + posterLayers + "<div id=\"dpc-bg\"></div><div id=\"dpc-content\"><div id=\"dpc-l\">'");
+            sb.AppendLine("    + '<div id=\"dpc-logo\"><span id=\"dpc-logo-mark\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 110 104\">' + svgLampaIcon + '</svg></span><span id=\"dpc-logo-text\">Lampac<span id=\"dpc-logo-next\"></span></span></div>'");
+            sb.AppendLine("    + '<h1 id=\"dpc-title\"></h1>'");
+            sb.AppendLine("    + '<p id=\"dpc-subtitle\"></p>'");
+            sb.AppendLine("    + '</div></div></div></div>';");
             sb.AppendLine("  document.body.insertAdjacentHTML('beforeend', html);");
-            sb.AppendLine("  document.getElementById('dpc-blocked-title').textContent = 'Доступ заблокирован';");
-            sb.AppendLine("  document.getElementById('dpc-blocked-msg').textContent = msg || '';");
+            sb.AppendLine("  if (!msg || /^вы заблокированы\\.?$/i.test(msg)) msg = 'Администратор закрыл доступ для этого аккаунта.';");
+            sb.AppendLine("  document.getElementById('dpc-logo-next').textContent = ' NextGen';");
+            sb.AppendLine("  document.getElementById('dpc-title').textContent = 'Доступ заблокирован';");
+            sb.AppendLine("  document.getElementById('dpc-subtitle').textContent = msg;");
+            if (conf.poster_wall)
+                sb.AppendLine("  dpcWallMount();");
             sb.AppendLine("}");
             sb.AppendLine();
 
