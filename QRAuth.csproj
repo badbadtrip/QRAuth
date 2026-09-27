@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Telegram.Bot" Version="22.4.4" />
+    <!-- IntelliSense only: at runtime the host (Lampac Shared) already provides NetVips -->
+    <PackageReference Include="NetVips" Version="3.2.0" />
   </ItemGroup>
 
   <!-- Кладёт Telegram.Bot.dll в references/ для рантайм-компиляции Roslyn на сервере -->

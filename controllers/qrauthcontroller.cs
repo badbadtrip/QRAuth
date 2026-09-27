@@ -44,9 +44,24 @@ namespace QRAuth.Controllers
         public ActionResult Posters()
         {
             if (!ModInit.denyConf.poster_wall)
-                return Ok(new { count = 0, v = 0, state = "disabled" });
+                return Ok(new { count = 0, v = 0, wall = false, state = "disabled" });
 
-            return Ok(new { count = PosterWall.Count, v = PosterWall.Version, state = PosterWall.State });
+            return Ok(new { count = PosterWall.Count, v = PosterWall.Version, wall = PosterWall.WallPath() != null, state = PosterWall.State });
+        }
+
+        /// <summary>The whole wall pre-rendered as one JPEG (PosterWall.BuildWall) — what
+        /// TVs and desktops load instead of 30 separate posters. No extension in the route
+        /// for the same accsdb reason as poster/{n} below.</summary>
+        [HttpGet("wall")]
+        public ActionResult Wall([FromQuery] string s = null)
+        {
+            // ?s=4k: 3840x2160 for screens wider than ~2000 device px (2K/4K); else 1080p.
+            string path = (s == "4k" ? PosterWall.WallPath(true) : null) ?? PosterWall.WallPath();
+            if (path == null)
+                return NotFound();
+
+            Response.Headers.CacheControl = "public, max-age=86400";
+            return PhysicalFile(path, "image/jpeg");
         }
 
         // No ".jpg" in the route on purpose: Lampac's accsdb middleware 404s any *.jpg

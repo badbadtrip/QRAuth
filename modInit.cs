@@ -105,6 +105,8 @@ namespace QRAuth
                 try
                 {
                     denyConf = ModuleInvoke.Init("DenyPage", new DenyPageConf());
+                    if (denyConf.poster_wall)
+                        PosterWall.LoadCached(denyConf.poster_source ?? "trending");
                     string content = DenyPageGenerator.Build(denyConf);
                     string hash = content.GetHashCode().ToString();
                     if (hash == _denyPageHash) return;
