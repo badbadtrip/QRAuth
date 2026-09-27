@@ -134,6 +134,20 @@ namespace QRAuth.Services
                         cancellationToken: ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+                catch (Telegram.Bot.Exceptions.ApiRequestException ex) when (ex.ErrorCode == 409)
+                {
+                    // Another process is polling with the same bot_token (e.g. a second Lampac
+                    // with a copied init.conf). Telegram then hands each update to whichever
+                    // poller asked last, so button presses land on the other instance at random
+                    // — its admin_ids / users.json / pending requests differ, which shows up
+                    // as "Недоступно." for a real admin, lost QR auto-login, grants written to
+                    // the wrong users.json. Not fixable from here: one token = one instance.
+                    _logger.LogError("[TelegramBot] 409 Conflict: этот bot_token опрашивает ещё один процесс. Оставьте токен только на одном сервере.");
+                    FileLog.Write("[TelegramBot] 409 Conflict: этот bot_token опрашивает ещё один процесс (второй Lampac с тем же init.conf?). Кнопки будут срабатывать через раз — оставьте токен только на одном сервере.");
+                    try { await Task.Delay(ErrorDelay, ct).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { break; }
+                    continue;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "[TelegramBot] GetUpdates error");
